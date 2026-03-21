@@ -1234,6 +1234,7 @@ function ExpensesPage() {
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ category_id:'', amount:'', recipient:'', description:'', expense_date: todayStr() });
 
   useEffect(() => { loadData(); }, [activeYear]);
@@ -1249,18 +1250,39 @@ function ExpensesPage() {
     setLoading(false);
   };
 
+  const openEdit = (e) => {
+    setEditing(e);
+    setForm({ category_id: e.category_id, amount: e.amount+'', recipient: e.recipient||'', description: e.description||'', expense_date: e.expense_date||todayStr() });
+    setShowModal(true);
+  };
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm({ category_id:'', amount:'', recipient:'', description:'', expense_date: todayStr() });
+    setShowModal(true);
+  };
+
   const handleSave = async () => {
     if(!form.category_id || !form.amount) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
-    const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'EXP' });
-    const voucherNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
-    const { error } = await supabase.from('expenses').insert({
-      voucher_number: voucherNum, category_id: form.category_id, academic_year_id: activeYear.id,
-      amount: parseInt(form.amount), recipient: form.recipient, description: form.description,
-      expense_date: form.expense_date, created_by: user.user_id
-    });
-    if(error) { showToast('خطأ في الحفظ', 'error'); return; }
-    showToast('تم إنشاء وصل المصروف بنجاح');
-    setShowModal(false); loadData();
+    if(editing) {
+      const { error } = await supabase.from('expenses').update({
+        category_id: form.category_id, amount: parseInt(form.amount), recipient: form.recipient,
+        description: form.description, expense_date: form.expense_date, updated_at: new Date().toISOString()
+      }).eq('id', editing.id);
+      if(error) { showToast('خطأ في التحديث', 'error'); return; }
+      showToast('تم تحديث وصل المصروف بنجاح');
+    } else {
+      const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'EXP' });
+      const voucherNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
+      const { error } = await supabase.from('expenses').insert({
+        voucher_number: voucherNum, category_id: form.category_id, academic_year_id: activeYear.id,
+        amount: parseInt(form.amount), recipient: form.recipient, description: form.description,
+        expense_date: form.expense_date, created_by: user.user_id
+      });
+      if(error) { showToast('خطأ في الحفظ', 'error'); return; }
+      showToast('تم إنشاء وصل المصروف بنجاح');
+    }
+    setShowModal(false); setEditing(null); loadData();
   };
 
   const filtered = expenses.filter(e => {
@@ -1275,7 +1297,7 @@ function ExpensesPage() {
 
   return (
     <div className="fade-in">
-      <PageHeader title="المصروفات" action={hasPerm('expenses.add') ? ()=>{setForm({category_id:'',amount:'',recipient:'',description:'',expense_date:todayStr()});setShowModal(true)} : null} actionLabel="وصل مصروف جديد"/>
+      <PageHeader title="المصروفات" action={hasPerm('expenses.add') ? openAdd : null} actionLabel="وصل مصروف جديد"/>
       <div className="card p-4 mb-4 flex flex-wrap gap-3">
         <div className="flex-1 min-w-[200px]"><SearchInput value={search} onChange={setSearch}/></div>
         <select className="input-field w-auto" value={filterCat} onChange={e=>setFilterCat(e.target.value)}>
@@ -1288,7 +1310,7 @@ function ExpensesPage() {
       </div>
       <div className="card table-container">
         <table>
-          <thead><tr><th>رقم الوصل</th><th>الصنف</th><th>المبلغ</th><th>المستلم</th><th>الوصف</th><th>التاريخ</th></tr></thead>
+          <thead><tr><th>رقم الوصل</th><th>الصنف</th><th>المبلغ</th><th>المستلم</th><th>الوصف</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
           <tbody>
             {filtered.map(e => (
               <tr key={e.id}>
@@ -1298,14 +1320,16 @@ function ExpensesPage() {
                 <td>{e.recipient || '-'}</td>
                 <td className="text-sm text-gray-500">{e.description || '-'}</td>
                 <td>{formatDate(e.expense_date)}</td>
+                <td>{hasPerm('expenses.edit') && <button onClick={()=>openEdit(e)} className="text-blue-600 hover:text-blue-800" title="تعديل">{Icons.edit}</button>}</td>
               </tr>
             ))}
-            {filtered.length===0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400">لا توجد مصروفات</td></tr>}
+            {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا توجد مصروفات</td></tr>}
           </tbody>
         </table>
       </div>
-      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title="وصل مصروف جديد">
+      <Modal isOpen={showModal} onClose={()=>{setShowModal(false);setEditing(null)}} title={editing ? 'تعديل وصل المصروف' : 'وصل مصروف جديد'}>
         <div className="space-y-4">
+          {editing && <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-center text-sm text-yellow-700">تعديل الوصل رقم: <b>{editing.voucher_number}</b></div>}
           <div><label className="block text-sm font-medium mb-1">صنف المصروف *</label>
             <select className="input-field" value={form.category_id} onChange={e=>setForm({...form,category_id:e.target.value})}>
               <option value="">اختر الصنف</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1317,7 +1341,7 @@ function ExpensesPage() {
           </div>
           <div><label className="block text-sm font-medium mb-1">اسم المستلم</label><input className="input-field" value={form.recipient} onChange={e=>setForm({...form,recipient:e.target.value})}/></div>
           <div><label className="block text-sm font-medium mb-1">وصف / ملاحظات</label><input className="input-field" value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></div>
-          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>إنشاء الوصل</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>{editing ? 'تحديث' : 'إنشاء الوصل'}</button><button className="btn-ghost" onClick={()=>{setShowModal(false);setEditing(null)}}>إلغاء</button></div>
         </div>
       </Modal>
     </div>
