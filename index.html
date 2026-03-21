@@ -461,14 +461,18 @@ function DashboardPage() {
   }, [activeYear]);
 
   const loadData = async () => {
+    if(!activeYear?.id) return;
     setLoading(true);
-    const { data: s } = await supabase.rpc('get_dashboard_stats', { p_year_id: activeYear.id });
-    setStats(s);
-    const { data: c } = await supabase.rpc('get_monthly_chart_data', { p_year_id: activeYear.id });
-    setChartData(c || []);
+    try {
+      const { data: s } = await supabase.rpc('get_dashboard_stats', { p_year_id: activeYear.id });
+      setStats(s);
+      const { data: c } = await supabase.rpc('get_monthly_chart_data', { p_year_id: activeYear.id });
+      setChartData(c || []);
+    } catch(e) { console.error('Dashboard error:', e); }
     setLoading(false);
   };
 
+  if(!activeYear) return <div className="text-center py-10 text-gray-500">جاري تحميل السنة الدراسية...</div>;
   if(loading) return <Loading/>;
 
   const statCards = [
@@ -2087,9 +2091,18 @@ function App() {
 
   useEffect(() => {
     // Check stored session
-    const stored = localStorage.getItem('kaizen_user');
-    if(stored) {
-      try { setUser(JSON.parse(stored)); } catch(e) {}
+    try {
+      const stored = localStorage.getItem('kaizen_user');
+      if(stored) {
+        const parsed = JSON.parse(stored);
+        if(parsed && parsed.user_id && parsed.role) {
+          setUser(parsed);
+        } else {
+          localStorage.removeItem('kaizen_user');
+        }
+      }
+    } catch(e) {
+      localStorage.removeItem('kaizen_user');
     }
   }, []);
 
@@ -2169,7 +2182,23 @@ function App() {
   );
 }
 
-ReactDOM.render(<App/>, document.getElementById('root'));
+// Error Boundary
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  render() {
+    if (this.state.hasError) {
+      return React.createElement('div', {style:{padding:40,textAlign:'center',fontFamily:'Cairo'}},
+        React.createElement('h2', {style:{color:'#e74c3c',marginBottom:16}}, 'حدث خطأ في النظام'),
+        React.createElement('p', {style:{color:'#666',marginBottom:16}}, String(this.state.error?.message || this.state.error)),
+        React.createElement('button', {onClick:()=>{localStorage.removeItem('kaizen_user');location.reload()},style:{background:'#1B3A5C',color:'white',padding:'10px 24px',borderRadius:8,border:'none',cursor:'pointer',fontSize:16}}, 'إعادة تحميل')
+      );
+    }
+    return this.props.children;
+  }
+}
+
+ReactDOM.render(React.createElement(ErrorBoundary, null, React.createElement(App)), document.getElementById('root'));
 </script>
 </body>
 </html>
