@@ -891,8 +891,17 @@ function ReservationsPage() {
     } else setStudentRegs([]);
   };
 
+  const [editing, setEditing] = useState(null);
+  const openEdit = (r) => { setEditing(r); setForm({ student_id: r.student_id, registration_id: r.registration_id||'', amount: r.amount+'', receipt_date: r.receipt_date||todayStr() }); setShowModal(true); };
+  const openAdd = () => { setEditing(null); setForm({student_id:'',registration_id:'',amount:'',receipt_date:todayStr()}); setStudentRegs([]); setShowModal(true); };
+
   const handleSave = async () => {
     if(!form.student_id || !form.amount) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
+    if(editing) {
+      const { error } = await supabase.from('seat_reservations').update({ amount: parseInt(form.amount), receipt_date: form.receipt_date, updated_at: new Date().toISOString() }).eq('id', editing.id);
+      if(error) { showToast('خطأ في التحديث', 'error'); return; }
+      showToast('تم تحديث وصل الحجز'); setShowModal(false); setEditing(null); loadData(); return;
+    }
     const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'RES' });
     const receiptNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
     const { data, error } = await supabase.from('seat_reservations').insert({
@@ -912,11 +921,11 @@ function ReservationsPage() {
 
   return (
     <div className="fade-in">
-      <PageHeader title="حجز المقاعد" action={hasPerm('reservations.add') ? ()=>{setForm({student_id:'',registration_id:'',amount:'',receipt_date:todayStr()});setStudentRegs([]);setShowModal(true)} : null} actionLabel="وصل حجز جديد"/>
+      <PageHeader title="حجز المقاعد" action={hasPerm('reservations.add') ? openAdd : null} actionLabel="وصل حجز جديد"/>
       <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch} placeholder="بحث بالاسم أو رقم الوصل..."/></div>
       <div className="card table-container">
         <table>
-          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المادة</th><th>الأستاذ</th><th>المبلغ</th><th>التاريخ</th><th>طباعة</th></tr></thead>
+          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المادة</th><th>الأستاذ</th><th>المبلغ</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
           <tbody>
             {filtered.map(r => (
               <tr key={r.id}>
@@ -926,14 +935,14 @@ function ReservationsPage() {
                 <td>{r.registrations?.teachers?.full_name || '-'}</td>
                 <td className="font-bold text-accent-600">{formatMoney(r.amount)} د.ع</td>
                 <td>{formatDate(r.receipt_date)}</td>
-                <td><button onClick={()=>setPrintData(r)} className="text-primary-600">{Icons.print}</button></td>
+                <td><div className="flex gap-2">{hasPerm('reservations.edit') && <button onClick={()=>openEdit(r)} className="text-blue-600">{Icons.edit}</button>}<button onClick={()=>setPrintData(r)} className="text-primary-600">{Icons.print}</button></div></td>
               </tr>
             ))}
             {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا توجد حجوزات</td></tr>}
           </tbody>
         </table>
       </div>
-      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title="وصل حجز مقعد جديد">
+      <Modal isOpen={showModal} onClose={()=>{setShowModal(false);setEditing(null)}} title={editing ? 'تعديل وصل الحجز' : 'وصل حجز مقعد جديد'}>
         <div className="space-y-4">
           <div><label className="block text-sm font-medium mb-1">الطالب *</label>
             <select className="input-field" value={form.student_id} onChange={e=>onStudentSelect(e.target.value)}>
@@ -949,7 +958,7 @@ function ReservationsPage() {
             <div><label className="block text-sm font-medium mb-1">المبلغ (د.ع) *</label><input className="input-field" type="number" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})}/></div>
             <div><label className="block text-sm font-medium mb-1">التاريخ</label><input className="input-field" type="date" value={form.receipt_date} onChange={e=>setForm({...form,receipt_date:e.target.value})}/></div>
           </div>
-          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>إنشاء الوصل</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>{editing ? 'تحديث' : 'إنشاء الوصل'}</button><button className="btn-ghost" onClick={()=>{setShowModal(false);setEditing(null)}}>إلغاء</button></div>
         </div>
       </Modal>
       {/* Print Receipt */}
@@ -974,6 +983,7 @@ function PaymentsPage() {
   const [form, setForm] = useState({ student_id:'', total_amount:'', allocation_type:'equal', receipt_date: todayStr(), allocations:[] });
   const [studentRegs, setStudentRegs] = useState([]);
   const [printData, setPrintData] = useState(null);
+  const [editing, setEditing] = useState(null);
 
   useEffect(() => { loadData(); }, [activeYear]);
 
@@ -994,6 +1004,23 @@ function PaymentsPage() {
       const { data } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name,commission_type,commission_value)').eq('student_id', sid).eq('is_active', true);
       setStudentRegs(data || []);
     } else setStudentRegs([]);
+  };
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm({student_id:'',total_amount:'',allocation_type:'equal',receipt_date:todayStr(),allocations:[]});
+    setStudentRegs([]);
+    setShowModal(true);
+  };
+
+  const openEdit = async (p) => {
+    setEditing(p);
+    setForm({student_id:p.student_id, total_amount:String(p.total_amount), allocation_type:p.allocation_type, receipt_date:p.receipt_date||todayStr(), allocations:[]});
+    if(p.student_id) {
+      const { data } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name,commission_type,commission_value)').eq('student_id', p.student_id).eq('is_active', true);
+      setStudentRegs(data || []);
+    }
+    setShowModal(true);
   };
 
   const handleSave = async () => {
@@ -1024,23 +1051,35 @@ function PaymentsPage() {
       });
     }
 
-    const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'PAY' });
-    const receiptNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
+    if(editing) {
+      const { error } = await supabase.from('payments').update({
+        student_id: form.student_id, total_amount: total, allocation_type: form.allocation_type, receipt_date: form.receipt_date
+      }).eq('id', editing.id);
+      if(error) { showToast('خطأ في التحديث', 'error'); return; }
+      // Delete old allocations and re-insert
+      await supabase.from('payment_allocations').delete().eq('payment_id', editing.id);
+      if(allocs.length > 0) {
+        await supabase.from('payment_allocations').insert(allocs.map(a=>({...a, payment_id: editing.id})));
+      }
+      showToast('تم تحديث وصل الدفع بنجاح');
+    } else {
+      const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'PAY' });
+      const receiptNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
 
-    const { data: payment, error } = await supabase.from('payments').insert({
-      receipt_number: receiptNum, student_id: form.student_id, academic_year_id: activeYear.id,
-      total_amount: total, allocation_type: form.allocation_type, receipt_date: form.receipt_date, created_by: user.user_id
-    }).select('*,students(full_name)').single();
+      const { data: payment, error } = await supabase.from('payments').insert({
+        receipt_number: receiptNum, student_id: form.student_id, academic_year_id: activeYear.id,
+        total_amount: total, allocation_type: form.allocation_type, receipt_date: form.receipt_date, created_by: user.user_id
+      }).select('*,students(full_name)').single();
 
-    if(error) { showToast('خطأ في الحفظ', 'error'); return; }
+      if(error) { showToast('خطأ في الحفظ', 'error'); return; }
 
-    // Insert allocations
-    if(allocs.length > 0) {
-      await supabase.from('payment_allocations').insert(allocs.map(a=>({...a, payment_id: payment.id})));
+      if(allocs.length > 0) {
+        await supabase.from('payment_allocations').insert(allocs.map(a=>({...a, payment_id: payment.id})));
+      }
+      showToast('تم إنشاء وصل الدفع بنجاح');
     }
-
-    showToast('تم إنشاء وصل الدفع بنجاح');
     setShowModal(false);
+    setEditing(null);
     loadData();
   };
 
@@ -1050,11 +1089,11 @@ function PaymentsPage() {
 
   return (
     <div className="fade-in">
-      <PageHeader title="دفعات الطلاب" action={hasPerm('payments.add') ? ()=>{setForm({student_id:'',total_amount:'',allocation_type:'equal',receipt_date:todayStr(),allocations:[]});setStudentRegs([]);setShowModal(true)} : null} actionLabel="وصل دفع جديد"/>
+      <PageHeader title="دفعات الطلاب" action={hasPerm('payments.add') ? openAdd : null} actionLabel="وصل دفع جديد"/>
       <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch}/></div>
       <div className="card table-container">
         <table>
-          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المبلغ</th><th>نوع التوزيع</th><th>التاريخ</th><th>طباعة</th></tr></thead>
+          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المبلغ</th><th>نوع التوزيع</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
           <tbody>
             {filtered.map(p => (
               <tr key={p.id}>
@@ -1063,14 +1102,14 @@ function PaymentsPage() {
                 <td className="font-bold text-accent-600">{formatMoney(p.total_amount)} د.ع</td>
                 <td>{p.allocation_type==='equal'?'توزيع متساوي':'توزيع يدوي'}</td>
                 <td>{formatDate(p.receipt_date)}</td>
-                <td><button onClick={()=>setPrintData(p)} className="text-primary-600">{Icons.print}</button></td>
+                <td><div className="flex gap-2">{hasPerm('payments.add') && <button onClick={()=>openEdit(p)} className="text-yellow-600" title="تعديل">{Icons.edit}</button>}<button onClick={()=>setPrintData(p)} className="text-primary-600">{Icons.print}</button></div></td>
               </tr>
             ))}
             {filtered.length===0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400">لا توجد دفعات</td></tr>}
           </tbody>
         </table>
       </div>
-      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title="وصل تسديد قسط جديد" wide>
+      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title={editing ? "تعديل وصل تسديد" : "وصل تسديد قسط جديد"} wide>
         <div className="space-y-4">
           <div><label className="block text-sm font-medium mb-1">الطالب *</label>
             <select className="input-field" value={form.student_id} onChange={e=>onStudentSelect(e.target.value)}>
@@ -1111,7 +1150,7 @@ function PaymentsPage() {
               }}/>
             </div>
           ))}
-          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>إنشاء الوصل</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>{editing ? 'تحديث الوصل' : 'إنشاء الوصل'}</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
         </div>
       </Modal>
       {printData && <ReceiptPrint type="payment" data={printData} onClose={()=>setPrintData(null)}/>}
@@ -1134,6 +1173,7 @@ function PayoutsPage() {
   const [form, setForm] = useState({ teacher_id:'', amount:'', payout_date: todayStr(), notes:'' });
   const [teacherBalance, setTeacherBalance] = useState(0);
   const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState(null);
 
   useEffect(() => { loadData(); }, [activeYear]);
 
@@ -1156,19 +1196,47 @@ function PayoutsPage() {
     } else setTeacherBalance(0);
   };
 
+  const openAdd = () => {
+    setEditing(null);
+    setForm({teacher_id:'',amount:'',payout_date:todayStr(),notes:''});
+    setTeacherBalance(0);
+    setShowModal(true);
+  };
+
+  const openEdit = async (p) => {
+    setEditing(p);
+    setForm({teacher_id:p.teacher_id, amount:String(p.amount), payout_date:p.payout_date||todayStr(), notes:p.notes||''});
+    if(p.teacher_id) {
+      const { data } = await supabase.rpc('get_teacher_balance', { p_teacher_id: p.teacher_id, p_year_id: activeYear.id });
+      setTeacherBalance(typeof data === 'number' ? data : (Array.isArray(data) ? data[0] : 0));
+    }
+    setShowModal(true);
+  };
+
   const handleSave = async () => {
     if(!form.teacher_id || !form.amount) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
     const amt = parseInt(form.amount);
-    const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'TOUT' });
-    const voucherNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
-    const { error } = await supabase.from('teacher_payouts').insert({
-      voucher_number: voucherNum, teacher_id: form.teacher_id, academic_year_id: activeYear.id,
-      amount: amt, balance_before: teacherBalance, balance_after: teacherBalance - amt,
-      payout_date: form.payout_date, notes: form.notes, created_by: user.user_id
-    });
-    if(error) { showToast('خطأ في الحفظ', 'error'); return; }
-    showToast('تم إنشاء وصل الصرف بنجاح');
-    setShowModal(false); loadData();
+
+    if(editing) {
+      const { error } = await supabase.from('teacher_payouts').update({
+        teacher_id: form.teacher_id, amount: amt, payout_date: form.payout_date, notes: form.notes
+      }).eq('id', editing.id);
+      if(error) { showToast('خطأ في التحديث', 'error'); return; }
+      showToast('تم تحديث وصل الصرف بنجاح');
+    } else {
+      const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'TOUT' });
+      const voucherNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
+      const { error } = await supabase.from('teacher_payouts').insert({
+        voucher_number: voucherNum, teacher_id: form.teacher_id, academic_year_id: activeYear.id,
+        amount: amt, balance_before: teacherBalance, balance_after: teacherBalance - amt,
+        payout_date: form.payout_date, notes: form.notes, created_by: user.user_id
+      });
+      if(error) { showToast('خطأ في الحفظ', 'error'); return; }
+      showToast('تم إنشاء وصل الصرف بنجاح');
+    }
+    setShowModal(false);
+    setEditing(null);
+    loadData();
   };
 
   const filtered = payouts.filter(p => p.teachers?.full_name?.includes(search) || p.voucher_number?.includes(search));
@@ -1177,11 +1245,11 @@ function PayoutsPage() {
 
   return (
     <div className="fade-in">
-      <PageHeader title="صرف الأساتذة" action={hasPerm('payouts.add') ? ()=>{setForm({teacher_id:'',amount:'',payout_date:todayStr(),notes:''});setTeacherBalance(0);setShowModal(true)} : null} actionLabel="وصل صرف جديد"/>
+      <PageHeader title="صرف الأساتذة" action={hasPerm('payouts.add') ? openAdd : null} actionLabel="وصل صرف جديد"/>
       <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch}/></div>
       <div className="card table-container">
         <table>
-          <thead><tr><th>رقم الوصل</th><th>الأستاذ</th><th>المبلغ</th><th>الرصيد قبل</th><th>الرصيد بعد</th><th>التاريخ</th></tr></thead>
+          <thead><tr><th>رقم الوصل</th><th>الأستاذ</th><th>المبلغ</th><th>الرصيد قبل</th><th>الرصيد بعد</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
           <tbody>
             {filtered.map(p => (
               <tr key={p.id}>
@@ -1191,13 +1259,14 @@ function PayoutsPage() {
                 <td>{formatMoney(p.balance_before)} د.ع</td>
                 <td>{formatMoney(p.balance_after)} د.ع</td>
                 <td>{formatDate(p.payout_date)}</td>
+                <td>{hasPerm('payouts.add') && <button onClick={()=>openEdit(p)} className="text-yellow-600" title="تعديل">{Icons.edit}</button>}</td>
               </tr>
             ))}
-            {filtered.length===0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400">لا توجد صرفيات</td></tr>}
+            {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا توجد صرفيات</td></tr>}
           </tbody>
         </table>
       </div>
-      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title="وصل صرف أستاذ جديد">
+      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title={editing ? "تعديل وصل صرف أستاذ" : "وصل صرف أستاذ جديد"}>
         <div className="space-y-4">
           <div><label className="block text-sm font-medium mb-1">الأستاذ *</label>
             <select className="input-field" value={form.teacher_id} onChange={e=>onTeacherSelect(e.target.value)}>
@@ -1213,7 +1282,7 @@ function PayoutsPage() {
             <div><label className="block text-sm font-medium mb-1">التاريخ</label><input className="input-field" type="date" value={form.payout_date} onChange={e=>setForm({...form,payout_date:e.target.value})}/></div>
           </div>
           <div><label className="block text-sm font-medium mb-1">ملاحظات</label><input className="input-field" value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="صرف مستحقات تدريس"/></div>
-          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>إنشاء الوصل</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>{editing ? 'تحديث الوصل' : 'إنشاء الوصل'}</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
         </div>
       </Modal>
     </div>
