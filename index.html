@@ -1,0 +1,2165 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>معهد كايزن - نظام الإدارة والمحاسبة</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.10.3/Recharts.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: { 50:'#e8eef5',100:'#c5d5e6',200:'#9eb8d4',300:'#7499c1',400:'#5482b3',500:'#1B3A5C',600:'#173252',700:'#122844',800:'#0e1e34',900:'#091424' },
+        accent: { 50:'#e9f5ed',100:'#c8e6d1',200:'#a3d5b2',300:'#7dc492',400:'#60b87a',500:'#2D8B4E',600:'#277d45',700:'#1f6b3a',800:'#18592f',900:'#103d20' }
+      },
+      fontFamily: { cairo: ['Cairo', 'sans-serif'] }
+    }
+  }
+}
+</script>
+<style>
+* { font-family: 'Cairo', sans-serif; }
+body { background: #f0f2f5; }
+.sidebar-item { transition: all 0.2s; }
+.sidebar-item:hover, .sidebar-item.active { background: rgba(255,255,255,0.15); }
+.card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.btn-primary { background: #1B3A5C; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
+.btn-primary:hover { background: #122844; }
+.btn-accent { background: #2D8B4E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
+.btn-accent:hover { background: #1f6b3a; }
+.btn-danger { background: #dc2626; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
+.btn-danger:hover { background: #b91c1c; }
+.btn-ghost { background: transparent; color: #1B3A5C; padding: 8px 20px; border-radius: 8px; font-weight: 600; border: 1px solid #d1d5db; transition: all 0.2s; }
+.btn-ghost:hover { background: #f3f4f6; }
+.input-field { width: 100%; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; direction: rtl; transition: border-color 0.2s; }
+.input-field:focus { outline: none; border-color: #1B3A5C; box-shadow: 0 0 0 3px rgba(27,58,92,0.1); }
+select.input-field { appearance: none; background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: left 10px center; background-size: 16px; }
+.table-container { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th { background: #f8f9fa; padding: 12px 16px; text-align: right; font-weight: 600; color: #374151; border-bottom: 2px solid #e5e7eb; font-size: 13px; white-space: nowrap; }
+td { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+tr:hover td { background: #f8fafc; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.modal-content { background: white; border-radius: 16px; padding: 24px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
+.toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 10px; color: white; font-weight: 600; z-index: 100; animation: slideDown 0.3s ease; }
+@keyframes slideDown { from { opacity:0; transform: translateX(-50%) translateY(-20px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.stat-card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); position: relative; overflow: hidden; }
+.stat-card::before { content: ''; position: absolute; top: 0; right: 0; width: 4px; height: 100%; }
+.loading { display: flex; justify-content: center; align-items: center; padding: 40px; }
+.spinner { width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #1B3A5C; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+  .print-receipt { page-break-inside: avoid; }
+}
+@media (max-width: 768px) {
+  .desktop-sidebar { display: none; }
+  .mobile-nav { display: flex !important; }
+  .main-content { margin-right: 0 !important; padding-bottom: 70px; }
+}
+@media (min-width: 769px) {
+  .mobile-nav { display: none !important; }
+}
+.fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } = React;
+
+// ============================================
+// SUPABASE CONFIG
+// ============================================
+const SUPABASE_URL = 'https://obcxwysfoyjuxkvfjlfh.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9iY3h3eXNmb3lqdXhrdmZqbGZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzkzOTMsImV4cCI6MjA4OTI1NTM5M30.vHsEj3i_24eabB260oWnvEVub5N_g-1cZ_uJk-a2A7A';
+
+// Simple Supabase client
+const supabase = {
+  from: (table) => ({
+    select: (cols = '*') => ({ _table: table, _select: cols, _filters: [], _order: null, _limit: null,
+      eq: function(col,val) { this._filters.push(`${col}=eq.${val}`); return this; },
+      neq: function(col,val) { this._filters.push(`${col}=neq.${val}`); return this; },
+      is: function(col,val) { this._filters.push(`${col}=is.${val}`); return this; },
+      gt: function(col,val) { this._filters.push(`${col}=gt.${val}`); return this; },
+      gte: function(col,val) { this._filters.push(`${col}=gte.${val}`); return this; },
+      lte: function(col,val) { this._filters.push(`${col}=lte.${val}`); return this; },
+      ilike: function(col,val) { this._filters.push(`${col}=ilike.${val}`); return this; },
+      in: function(col,vals) { this._filters.push(`${col}=in.(${vals.join(',')})`); return this; },
+      order: function(col, opts={}) { this._order = `${col}.${opts.ascending?'asc':'desc'}`; return this; },
+      limit: function(n) { this._limit = n; return this; },
+      single: function() { this._single = true; return this; },
+      then: async function(resolve, reject) {
+        try {
+          let url = `${SUPABASE_URL}/rest/v1/${this._table}?select=${encodeURIComponent(this._select)}`;
+          this._filters.forEach(f => url += `&${f}`);
+          if(this._order) url += `&order=${this._order}`;
+          if(this._limit) url += `&limit=${this._limit}`;
+          const headers = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' };
+          if(this._single) headers['Accept'] = 'application/vnd.pgrst.object+json';
+          const res = await fetch(url, { headers });
+          if(!res.ok) { const e = await res.json(); return resolve({ data: null, error: e }); }
+          const data = await res.json();
+          resolve({ data, error: null });
+        } catch(e) { resolve({ data: null, error: e }); }
+      }
+    }),
+    insert: (data) => ({
+      _table: table, _data: data,
+      select: function(cols) { this._returning = cols; return this; },
+      single: function() { this._single = true; return this; },
+      then: async function(resolve) {
+        try {
+          const url = `${SUPABASE_URL}/rest/v1/${this._table}`;
+          const headers = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+          if(this._single) headers['Accept'] = 'application/vnd.pgrst.object+json';
+          const res = await fetch(url, { method:'POST', headers, body: JSON.stringify(Array.isArray(this._data)?this._data:[this._data]) });
+          if(!res.ok) { const e = await res.json(); return resolve({ data: null, error: e }); }
+          const d = await res.json();
+          resolve({ data: d, error: null });
+        } catch(e) { resolve({ data: null, error: e }); }
+      }
+    }),
+    update: (data) => ({
+      _table: table, _data: data, _filters: [],
+      eq: function(col,val) { this._filters.push(`${col}=eq.${val}`); return this; },
+      select: function() { this._returning = true; return this; },
+      single: function() { this._single = true; return this; },
+      then: async function(resolve) {
+        try {
+          let url = `${SUPABASE_URL}/rest/v1/${this._table}?`;
+          url += this._filters.join('&');
+          const headers = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+          if(this._single) headers['Accept'] = 'application/vnd.pgrst.object+json';
+          const res = await fetch(url, { method:'PATCH', headers, body: JSON.stringify(this._data) });
+          if(!res.ok) { const e = await res.json(); return resolve({ data: null, error: e }); }
+          const d = await res.json();
+          resolve({ data: d, error: null });
+        } catch(e) { resolve({ data: null, error: e }); }
+      }
+    }),
+    delete: () => ({
+      _table: table, _filters: [],
+      eq: function(col,val) { this._filters.push(`${col}=eq.${val}`); return this; },
+      then: async function(resolve) {
+        try {
+          let url = `${SUPABASE_URL}/rest/v1/${this._table}?`;
+          url += this._filters.join('&');
+          const headers = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=representation' };
+          const res = await fetch(url, { method:'DELETE', headers });
+          if(!res.ok) { const e = await res.json(); return resolve({ data: null, error: e }); }
+          const d = await res.json();
+          resolve({ data: d, error: null });
+        } catch(e) { resolve({ data: null, error: e }); }
+      }
+    }),
+    upsert: (data) => ({
+      _table: table, _data: data,
+      select: function() { this._returning = true; return this; },
+      single: function() { this._single = true; return this; },
+      then: async function(resolve) {
+        try {
+          const url = `${SUPABASE_URL}/rest/v1/${this._table}`;
+          const headers = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation,resolution=merge-duplicates' };
+          if(this._single) headers['Accept'] = 'application/vnd.pgrst.object+json';
+          const res = await fetch(url, { method:'POST', headers, body: JSON.stringify(Array.isArray(this._data)?this._data:[this._data]) });
+          if(!res.ok) { const e = await res.json(); return resolve({ data: null, error: e }); }
+          const d = await res.json();
+          resolve({ data: d, error: null });
+        } catch(e) { resolve({ data: null, error: e }); }
+      }
+    })
+  }),
+  rpc: (fn, params={}) => ({
+    then: async function(resolve) {
+      try {
+        const url = `${SUPABASE_URL}/rest/v1/rpc/${fn}`;
+        const headers = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' };
+        const res = await fetch(url, { method:'POST', headers, body: JSON.stringify(params) });
+        if(!res.ok) { const e = await res.json(); return resolve({ data: null, error: e }); }
+        const d = await res.json();
+        resolve({ data: d, error: null });
+      } catch(e) { resolve({ data: null, error: e }); }
+    }
+  })
+};
+
+// ============================================
+// CONTEXTS
+// ============================================
+const AuthContext = createContext();
+const ToastContext = createContext();
+const YearContext = createContext();
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+const formatMoney = (amount) => {
+  if(!amount && amount !== 0) return '0';
+  return Number(amount).toLocaleString('en-US');
+};
+const formatDate = (date) => {
+  if(!date) return '';
+  return new Date(date).toLocaleDateString('en-CA');
+};
+const todayStr = () => new Date().toISOString().split('T')[0];
+
+// Permission keys
+const ALL_PERMISSIONS = [
+  { group: 'الطلاب', keys: ['students.view','students.add','students.edit','students.delete'] },
+  { group: 'الأساتذة', keys: ['teachers.view','teachers.add','teachers.edit','teachers.delete'] },
+  { group: 'حجز المقاعد', keys: ['reservations.view','reservations.add','reservations.edit'] },
+  { group: 'دفعات الطلاب', keys: ['payments.view','payments.add','payments.edit'] },
+  { group: 'صرف الأساتذة', keys: ['payouts.view','payouts.add','payouts.edit'] },
+  { group: 'المصروفات', keys: ['expenses.view','expenses.add','expenses.edit','expenses.categories'] },
+  { group: 'التقارير', keys: ['reports.revenue','reports.expenses','reports.pnl','reports.student_stmt','reports.teacher_stmt','reports.late_payments'] },
+  { group: 'لوحة التحكم', keys: ['dashboard.view','dashboard.numbers'] },
+  { group: 'الإعدادات', keys: ['settings.years','settings.subjects','settings.grades','settings.institute'] },
+];
+
+const PERM_LABELS = {
+  'students.view':'عرض الطلاب','students.add':'إضافة طلاب','students.edit':'تعديل طلاب','students.delete':'حذف طلاب',
+  'teachers.view':'عرض الأساتذة','teachers.add':'إضافة أساتذة','teachers.edit':'تعديل أساتذة','teachers.delete':'حذف أساتذة',
+  'reservations.view':'عرض الحجوزات','reservations.add':'إنشاء وصل حجز','reservations.edit':'تعديل الحجوزات',
+  'payments.view':'عرض الدفعات','payments.add':'إنشاء وصل دفع','payments.edit':'تعديل الدفعات',
+  'payouts.view':'عرض الصرفيات','payouts.add':'إنشاء وصل صرف','payouts.edit':'تعديل الصرفيات',
+  'expenses.view':'عرض المصروفات','expenses.add':'إنشاء وصل مصروف','expenses.edit':'تعديل المصروفات','expenses.categories':'إدارة الأصناف',
+  'reports.revenue':'تقرير الإيرادات','reports.expenses':'تقرير المصروفات','reports.pnl':'تقرير الأرباح والخسائر',
+  'reports.student_stmt':'كشف حساب طالب','reports.teacher_stmt':'كشف حساب أستاذ','reports.late_payments':'تقرير المتأخرين',
+  'dashboard.view':'عرض لوحة التحكم','dashboard.numbers':'عرض الأرقام المالية',
+  'settings.years':'إدارة السنوات الدراسية','settings.subjects':'إدارة المواد','settings.grades':'إدارة المراحل','settings.institute':'إعدادات المعهد',
+};
+
+// ============================================
+// ICONS (SVG)
+// ============================================
+const Icons = {
+  dashboard: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
+  students: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  teachers: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  money: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+  receipt: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+  expense: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+  reports: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+  settings: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+  users: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>,
+  logout: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+  plus: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  edit: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  trash: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  search: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  print: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
+  eye: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+  close: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  menu: <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
+  chair: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M19 21l-1-6H6l-1 6"/><rect x="4" y="5" width="16" height="10" rx="2"/></svg>,
+};
+
+// ============================================
+// TOAST PROVIDER
+// ============================================
+function ToastProvider({ children }) {
+  const [toast, setToast] = useState(null);
+  const showToast = useCallback((msg, type='success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+  return (
+    <ToastContext.Provider value={showToast}>
+      {children}
+      {toast && <div className="toast" style={{ background: toast.type==='success'?'#2D8B4E':'#dc2626' }}>{toast.msg}</div>}
+    </ToastContext.Provider>
+  );
+}
+
+// ============================================
+// COMPONENTS
+// ============================================
+function Loading() { return <div className="loading"><div className="spinner"></div></div>; }
+
+function Modal({ isOpen, onClose, title, children, wide }) {
+  if(!isOpen) return null;
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className={`modal-content ${wide ? 'max-w-4xl' : ''}`} onClick={e=>e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold text-gray-800">{title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">{Icons.close}</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDialog({ isOpen, onConfirm, onCancel, message }) {
+  if(!isOpen) return null;
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-content max-w-sm text-center" onClick={e=>e.stopPropagation()}>
+        <p className="text-gray-700 mb-6 text-lg">{message}</p>
+        <div className="flex gap-3 justify-center">
+          <button className="btn-danger" onClick={onConfirm}>نعم، حذف</button>
+          <button className="btn-ghost" onClick={onCancel}>إلغاء</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SearchInput({ value, onChange, placeholder }) {
+  return (
+    <div className="relative">
+      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">{Icons.search}</span>
+      <input className="input-field pr-10" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder || 'بحث...'} />
+    </div>
+  );
+}
+
+function PageHeader({ title, action, actionLabel, actionIcon }) {
+  return (
+    <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
+      <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
+      {action && <button className="btn-primary flex items-center gap-2" onClick={action}>{actionIcon || Icons.plus}<span>{actionLabel}</span></button>}
+    </div>
+  );
+}
+
+// ============================================
+// LOGIN PAGE
+// ============================================
+function LoginPage({ onLogin }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    const { data, error: err } = await supabase.rpc('login', { p_username: username, p_password: password });
+    setLoading(false);
+    if(err) { setError('اسم المستخدم أو كلمة المرور غير صحيحة'); return; }
+    const user = Array.isArray(data) ? data[0] : data;
+    if(!user) { setError('اسم المستخدم أو كلمة المرور غير صحيحة'); return; }
+    // Get permissions
+    const { data: perms } = await supabase.rpc('get_user_permissions', { p_user_id: user.user_id });
+    const permMap = {};
+    if(perms) perms.forEach(p => permMap[p.permission_key] = p.granted);
+    onLogin({ ...user, permissions: permMap });
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-600 to-primary-900 p-4">
+      <div className="card p-8 w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 bg-primary-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-white text-3xl font-bold">K</span>
+          </div>
+          <h1 className="text-2xl font-bold text-primary-700">معهد كايزن</h1>
+          <p className="text-gray-500 text-sm">Kaizen Institute</p>
+          <p className="text-gray-400 text-xs mt-1">نظام الإدارة والمحاسبة</p>
+        </div>
+        <form onSubmit={handleLogin}>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">اسم المستخدم</label>
+            <input className="input-field" value={username} onChange={e=>setUsername(e.target.value)} placeholder="أدخل اسم المستخدم" required />
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">كلمة المرور</label>
+            <input className="input-field" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="أدخل كلمة المرور" required />
+          </div>
+          {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+          <button className="btn-primary w-full py-3 text-lg" disabled={loading}>{loading ? 'جاري الدخول...' : 'تسجيل الدخول'}</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// SIDEBAR
+// ============================================
+function Sidebar({ activePage, setActivePage, user, onLogout }) {
+  const hasPerm = (key) => user.role === 'admin' || user.permissions[key];
+  const items = [
+    { id:'dashboard', label:'لوحة التحكم', icon: Icons.dashboard, perm:'dashboard.view' },
+    { id:'students', label:'الطلاب', icon: Icons.students, perm:'students.view' },
+    { id:'teachers', label:'الأساتذة', icon: Icons.teachers, perm:'teachers.view' },
+    { id:'reservations', label:'حجز المقاعد', icon: Icons.chair, perm:'reservations.view' },
+    { id:'payments', label:'دفعات الطلاب', icon: Icons.money, perm:'payments.view' },
+    { id:'payouts', label:'صرف الأساتذة', icon: Icons.expense, perm:'payouts.view' },
+    { id:'expenses', label:'المصروفات', icon: Icons.receipt, perm:'expenses.view' },
+    { id:'reports', label:'التقارير', icon: Icons.reports, perm:'reports.revenue' },
+    { id:'settings', label:'الإعدادات', icon: Icons.settings, perm:'settings.years' },
+  ];
+  if(user.role === 'admin') items.push({ id:'usermgmt', label:'إدارة المستخدمين', icon: Icons.users, perm: null });
+
+  return (
+    <>
+      {/* Desktop Sidebar */}
+      <div className="desktop-sidebar fixed right-0 top-0 w-64 h-full bg-gradient-to-b from-primary-600 to-primary-800 text-white z-40 overflow-y-auto no-print">
+        <div className="p-5 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center font-bold">K</div>
+            <div>
+              <h3 className="font-bold text-sm">معهد كايزن</h3>
+              <p className="text-xs text-white/60">{user.full_name}</p>
+            </div>
+          </div>
+        </div>
+        <nav className="p-3">
+          {items.filter(i=> !i.perm || hasPerm(i.perm)).map(item => (
+            <button key={item.id} onClick={()=>setActivePage(item.id)}
+              className={`sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-1 text-sm ${activePage===item.id?'active bg-white/15 font-bold':''}`}>
+              {item.icon}<span>{item.label}</span>
+            </button>
+          ))}
+          <button onClick={onLogout} className="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-lg mt-4 text-red-300 hover:text-red-200">
+            {Icons.logout}<span>تسجيل الخروج</span>
+          </button>
+        </nav>
+      </div>
+      {/* Mobile Bottom Nav */}
+      <div className="mobile-nav fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 justify-around items-center py-2 px-1 no-print" style={{display:'none'}}>
+        {items.filter(i=> !i.perm || hasPerm(i.perm)).slice(0,5).map(item => (
+          <button key={item.id} onClick={()=>setActivePage(item.id)}
+            className={`flex flex-col items-center text-xs px-2 py-1 ${activePage===item.id?'text-primary-600 font-bold':'text-gray-500'}`}>
+            {item.icon}<span className="mt-1">{item.label}</span>
+          </button>
+        ))}
+        <button onClick={()=>setActivePage(activePage==='more'?'dashboard':'more')}
+          className="flex flex-col items-center text-xs px-2 py-1 text-gray-500">
+          {Icons.menu}<span className="mt-1">المزيد</span>
+        </button>
+      </div>
+    </>
+  );
+}
+
+// ============================================
+// DASHBOARD PAGE
+// ============================================
+function DashboardPage() {
+  const { activeYear } = useContext(YearContext);
+  const [stats, setStats] = useState(null);
+  const [chartData, setChartData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if(!activeYear) return;
+    loadData();
+  }, [activeYear]);
+
+  const loadData = async () => {
+    setLoading(true);
+    const { data: s } = await supabase.rpc('get_dashboard_stats', { p_year_id: activeYear.id });
+    setStats(s);
+    const { data: c } = await supabase.rpc('get_monthly_chart_data', { p_year_id: activeYear.id });
+    setChartData(c || []);
+    setLoading(false);
+  };
+
+  if(loading) return <Loading/>;
+
+  const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } = Recharts;
+  const COLORS = ['#1B3A5C', '#2D8B4E', '#e67e22', '#e74c3c', '#9b59b6', '#1abc9c'];
+
+  const statCards = [
+    { label: 'عدد الطلاب', value: stats?.total_students || 0, color: '#1B3A5C', icon: Icons.students },
+    { label: 'عدد الأساتذة', value: stats?.total_teachers || 0, color: '#2D8B4E', icon: Icons.teachers },
+    { label: 'إيرادات الشهر', value: formatMoney(stats?.month_revenue || 0) + ' د.ع', color: '#2D8B4E', icon: Icons.money },
+    { label: 'مصروفات الشهر', value: formatMoney(stats?.month_expenses || 0) + ' د.ع', color: '#e74c3c', icon: Icons.expense },
+    { label: 'صافي الربح', value: formatMoney(stats?.net_profit || 0) + ' د.ع', color: (stats?.net_profit||0) >= 0 ? '#2D8B4E' : '#e74c3c', icon: Icons.reports },
+    { label: 'الأرصدة المعلقة', value: formatMoney(stats?.total_outstanding || 0) + ' د.ع', color: '#e67e22', icon: Icons.receipt },
+  ];
+
+  return (
+    <div className="fade-in">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">لوحة التحكم - {activeYear?.name}</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        {statCards.map((s, i) => (
+          <div key={i} className="stat-card" style={{'--accent': s.color}}>
+            <div className="absolute top-0 right-0 w-1 h-full" style={{background: s.color}}></div>
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-gray-500 text-sm mb-1">{s.label}</p>
+                <p className="text-2xl font-bold" style={{color: s.color}}>{s.value}</p>
+              </div>
+              <div className="p-2 rounded-lg" style={{background: s.color+'15', color: s.color}}>{s.icon}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="card p-5">
+          <h3 className="font-bold text-gray-700 mb-4">الإيرادات مقابل المصروفات (شهري)</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3"/>
+              <XAxis dataKey="month_name" tick={{fontSize:11}}/>
+              <YAxis tick={{fontSize:11}} tickFormatter={v=>formatMoney(v)}/>
+              <Tooltip formatter={v=>formatMoney(v)+' د.ع'}/>
+              <Legend/>
+              <Bar dataKey="revenue" name="الإيرادات" fill="#2D8B4E" radius={[4,4,0,0]}/>
+              <Bar dataKey="expenses" name="المصروفات" fill="#e74c3c" radius={[4,4,0,0]}/>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="card p-5">
+          <h3 className="font-bold text-gray-700 mb-4">صافي الربح الشهري</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={chartData.map(d=>({...d, profit: (d.revenue||0)-(d.expenses||0)}))}>
+              <CartesianGrid strokeDasharray="3 3"/>
+              <XAxis dataKey="month_name" tick={{fontSize:11}}/>
+              <YAxis tick={{fontSize:11}} tickFormatter={v=>formatMoney(v)}/>
+              <Tooltip formatter={v=>formatMoney(v)+' د.ع'}/>
+              <Line type="monotone" dataKey="profit" name="صافي الربح" stroke="#1B3A5C" strokeWidth={3} dot={{r:5}}/>
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// STUDENTS PAGE
+// ============================================
+function StudentsPage() {
+  const showToast = useContext(ToastContext);
+  const { activeYear } = useContext(YearContext);
+  const { user } = useContext(AuthContext);
+  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const [students, setStudents] = useState([]);
+  const [grades, setGrades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
+  const [form, setForm] = useState({ full_name:'', grade_level_id:'', student_phone:'', parent_phone:'' });
+  // Registration modal
+  const [showRegModal, setShowRegModal] = useState(false);
+  const [regStudent, setRegStudent] = useState(null);
+  const [subjects, setSubjects] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [registrations, setRegistrations] = useState([]);
+  const [regForm, setRegForm] = useState({ subject_id:'', teacher_id:'', total_tuition:'' });
+
+  useEffect(() => { loadData(); }, [activeYear]);
+
+  const loadData = async () => {
+    setLoading(true);
+    const [sRes, gRes, subRes, tRes] = await Promise.all([
+      supabase.from('students').select('*,grade_levels(name)').eq('academic_year_id', activeYear?.id).eq('is_active', true).order('created_at', {ascending:false}),
+      supabase.from('grade_levels').select('*').eq('is_active', true).order('sort_order', {ascending:true}),
+      supabase.from('subjects').select('*').eq('is_active', true).order('sort_order', {ascending:true}),
+      supabase.from('teachers').select('*,teacher_subjects(subject_id)').eq('is_active', true)
+    ]);
+    setStudents(sRes.data || []);
+    setGrades(gRes.data || []);
+    setSubjects(subRes.data || []);
+    setTeachers(tRes.data || []);
+    setLoading(false);
+  };
+
+  const handleSave = async () => {
+    if(!form.full_name) { showToast('يرجى إدخال اسم الطالب', 'error'); return; }
+    if(editing) {
+      const { error } = await supabase.from('students').update({...form, updated_at: new Date().toISOString()}).eq('id', editing.id);
+      if(error) { showToast('خطأ في التحديث', 'error'); return; }
+      showToast('تم تحديث بيانات الطالب');
+    } else {
+      const { error } = await supabase.from('students').insert({...form, academic_year_id: activeYear.id});
+      if(error) { showToast('خطأ في الإضافة', 'error'); return; }
+      showToast('تم إضافة الطالب بنجاح');
+    }
+    setShowModal(false); setEditing(null); setForm({ full_name:'', grade_level_id:'', student_phone:'', parent_phone:'' });
+    loadData();
+  };
+
+  const handleDelete = async () => {
+    await supabase.from('students').update({ is_active: false }).eq('id', confirmDel);
+    setConfirmDel(null); showToast('تم حذف الطالب'); loadData();
+  };
+
+  const openEdit = (s) => {
+    setEditing(s);
+    setForm({ full_name: s.full_name, grade_level_id: s.grade_level_id||'', student_phone: s.student_phone||'', parent_phone: s.parent_phone||'' });
+    setShowModal(true);
+  };
+
+  const openRegs = async (s) => {
+    setRegStudent(s);
+    const { data } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name)').eq('student_id', s.id).eq('is_active', true);
+    setRegistrations(data || []);
+    setShowRegModal(true);
+  };
+
+  const addRegistration = async () => {
+    if(!regForm.subject_id || !regForm.teacher_id || !regForm.total_tuition) { showToast('يرجى ملء جميع الحقول', 'error'); return; }
+    const teacher = teachers.find(t=>t.id===regForm.teacher_id);
+    const total = parseInt(regForm.total_tuition);
+    let instShare = teacher.commission_type==='percentage' ? Math.round(total * teacher.commission_value / 100) : teacher.commission_value;
+    let teacherShare = total - instShare;
+    const { error } = await supabase.from('registrations').insert({
+      student_id: regStudent.id, subject_id: regForm.subject_id, teacher_id: regForm.teacher_id,
+      academic_year_id: activeYear.id, total_tuition: total, institute_share: instShare, teacher_share: teacherShare
+    });
+    if(error) { showToast('خطأ في التسجيل', 'error'); return; }
+    showToast('تم تسجيل المادة بنجاح');
+    setRegForm({ subject_id:'', teacher_id:'', total_tuition:'' });
+    const { data } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name)').eq('student_id', regStudent.id).eq('is_active', true);
+    setRegistrations(data || []);
+  };
+
+  const filtered = students.filter(s => s.full_name.includes(search) || (s.student_phone||'').includes(search));
+
+  if(loading) return <Loading/>;
+
+  return (
+    <div className="fade-in">
+      <PageHeader title="الطلاب" action={hasPerm('students.add') ? ()=>{setEditing(null);setForm({full_name:'',grade_level_id:'',student_phone:'',parent_phone:''});setShowModal(true)} : null} actionLabel="إضافة طالب"/>
+      <div className="card p-4 mb-4">
+        <SearchInput value={search} onChange={setSearch} placeholder="بحث بالاسم أو رقم الهاتف..."/>
+      </div>
+      <div className="card table-container">
+        <table>
+          <thead><tr><th>#</th><th>الاسم</th><th>المرحلة</th><th>هاتف الطالب</th><th>هاتف ولي الأمر</th><th>تاريخ التسجيل</th><th>إجراءات</th></tr></thead>
+          <tbody>
+            {filtered.map((s, i) => (
+              <tr key={s.id}>
+                <td>{i+1}</td>
+                <td className="font-medium">{s.full_name}</td>
+                <td>{s.grade_levels?.name || '-'}</td>
+                <td>{s.student_phone || '-'}</td>
+                <td>{s.parent_phone || '-'}</td>
+                <td>{formatDate(s.registration_date)}</td>
+                <td>
+                  <div className="flex gap-2">
+                    <button onClick={()=>openRegs(s)} className="text-primary-600 hover:text-primary-800" title="المواد">{Icons.eye}</button>
+                    {hasPerm('students.edit') && <button onClick={()=>openEdit(s)} className="text-blue-600 hover:text-blue-800">{Icons.edit}</button>}
+                    {hasPerm('students.delete') && <button onClick={()=>setConfirmDel(s.id)} className="text-red-500 hover:text-red-700">{Icons.trash}</button>}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا يوجد طلاب</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {/* Add/Edit Modal */}
+      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title={editing?'تعديل بيانات الطالب':'إضافة طالب جديد'}>
+        <div className="space-y-4">
+          <div><label className="block text-sm font-medium mb-1">الاسم الثلاثي *</label><input className="input-field" value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></div>
+          <div><label className="block text-sm font-medium mb-1">المرحلة الدراسية</label>
+            <select className="input-field" value={form.grade_level_id} onChange={e=>setForm({...form,grade_level_id:e.target.value})}>
+              <option value="">اختر المرحلة</option>
+              {grades.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-sm font-medium mb-1">هاتف الطالب</label><input className="input-field" value={form.student_phone} onChange={e=>setForm({...form,student_phone:e.target.value})}/></div>
+            <div><label className="block text-sm font-medium mb-1">هاتف ولي الأمر</label><input className="input-field" value={form.parent_phone} onChange={e=>setForm({...form,parent_phone:e.target.value})}/></div>
+          </div>
+          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>{editing?'تحديث':'إضافة'}</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+        </div>
+      </Modal>
+      {/* Registrations Modal */}
+      <Modal isOpen={showRegModal} onClose={()=>setShowRegModal(false)} title={`مواد الطالب: ${regStudent?.full_name||''}`} wide>
+        <div className="mb-4">
+          <table><thead><tr><th>المادة</th><th>الأستاذ</th><th>القسط الكلي</th><th>حصة المعهد</th><th>حصة الأستاذ</th><th>المدفوع</th><th>المتبقي</th></tr></thead>
+            <tbody>
+              {registrations.map(r=>(
+                <tr key={r.id}>
+                  <td>{r.subjects?.name_ar}</td><td>{r.teachers?.full_name}</td>
+                  <td>{formatMoney(r.total_tuition)}</td><td>{formatMoney(r.institute_share)}</td><td>{formatMoney(r.teacher_share)}</td>
+                  <td className="text-green-600 font-medium">{formatMoney(r.total_paid)}</td>
+                  <td className="text-red-500 font-medium">{formatMoney(r.remaining_balance)}</td>
+                </tr>
+              ))}
+              {registrations.length===0 && <tr><td colSpan="7" className="text-center py-4 text-gray-400">لا توجد مواد مسجلة</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        {hasPerm('students.add') && (
+          <div className="border-t pt-4">
+            <h4 className="font-bold text-gray-700 mb-3">تسجيل مادة جديدة</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <select className="input-field" value={regForm.subject_id} onChange={e=>setRegForm({...regForm,subject_id:e.target.value})}>
+                <option value="">المادة</option>{subjects.map(s=><option key={s.id} value={s.id}>{s.name_ar}</option>)}
+              </select>
+              <select className="input-field" value={regForm.teacher_id} onChange={e=>setRegForm({...regForm,teacher_id:e.target.value})}>
+                <option value="">الأستاذ</option>{teachers.filter(t=> !regForm.subject_id || t.teacher_subjects?.some(ts=>ts.subject_id===regForm.subject_id)).map(t=><option key={t.id} value={t.id}>{t.full_name}</option>)}
+              </select>
+              <input className="input-field" type="number" placeholder="القسط الكلي (د.ع)" value={regForm.total_tuition} onChange={e=>setRegForm({...regForm,total_tuition:e.target.value})}/>
+              <button className="btn-accent" onClick={addRegistration}>تسجيل</button>
+            </div>
+          </div>
+        )}
+      </Modal>
+      <ConfirmDialog isOpen={!!confirmDel} onConfirm={handleDelete} onCancel={()=>setConfirmDel(null)} message="هل أنت متأكد من حذف هذا الطالب؟"/>
+    </div>
+  );
+}
+
+// ============================================
+// TEACHERS PAGE
+// ============================================
+function TeachersPage() {
+  const showToast = useContext(ToastContext);
+  const { user } = useContext(AuthContext);
+  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const [teachers, setTeachers] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
+  const [form, setForm] = useState({ full_name:'', phone:'', commission_type:'percentage', commission_value:'', subject_ids:[] });
+
+  useEffect(() => { loadData(); }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    const [tRes, sRes] = await Promise.all([
+      supabase.from('teachers').select('*,teacher_subjects(subject_id,subjects(name_ar))').eq('is_active', true).order('created_at', {ascending:false}),
+      supabase.from('subjects').select('*').eq('is_active', true).order('sort_order', {ascending:true})
+    ]);
+    setTeachers(tRes.data || []);
+    setSubjects(sRes.data || []);
+    setLoading(false);
+  };
+
+  const handleSave = async () => {
+    if(!form.full_name || !form.commission_value) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
+    const payload = { full_name: form.full_name, phone: form.phone, commission_type: form.commission_type, commission_value: parseInt(form.commission_value) };
+    if(editing) {
+      await supabase.from('teachers').update({...payload, updated_at: new Date().toISOString()}).eq('id', editing.id);
+      await supabase.from('teacher_subjects').delete().eq('teacher_id', editing.id);
+      if(form.subject_ids.length) await supabase.from('teacher_subjects').insert(form.subject_ids.map(sid=>({teacher_id:editing.id, subject_id:sid})));
+      showToast('تم تحديث بيانات الأستاذ');
+    } else {
+      const { data } = await supabase.from('teachers').insert(payload).select().single();
+      if(data && form.subject_ids.length) await supabase.from('teacher_subjects').insert(form.subject_ids.map(sid=>({teacher_id:data.id, subject_id:sid})));
+      showToast('تم إضافة الأستاذ بنجاح');
+    }
+    setShowModal(false); setEditing(null); loadData();
+  };
+
+  const handleDelete = async () => {
+    await supabase.from('teachers').update({ is_active: false }).eq('id', confirmDel);
+    setConfirmDel(null); showToast('تم حذف الأستاذ'); loadData();
+  };
+
+  const openEdit = (t) => {
+    setEditing(t);
+    setForm({ full_name:t.full_name, phone:t.phone||'', commission_type:t.commission_type, commission_value:t.commission_value+'', subject_ids: (t.teacher_subjects||[]).map(ts=>ts.subject_id) });
+    setShowModal(true);
+  };
+
+  const toggleSubject = (sid) => {
+    setForm(f => ({ ...f, subject_ids: f.subject_ids.includes(sid) ? f.subject_ids.filter(id=>id!==sid) : [...f.subject_ids, sid] }));
+  };
+
+  const filtered = teachers.filter(t => t.full_name.includes(search) || (t.phone||'').includes(search));
+
+  if(loading) return <Loading/>;
+
+  return (
+    <div className="fade-in">
+      <PageHeader title="الأساتذة" action={hasPerm('teachers.add') ? ()=>{setEditing(null);setForm({full_name:'',phone:'',commission_type:'percentage',commission_value:'',subject_ids:[]});setShowModal(true)} : null} actionLabel="إضافة أستاذ"/>
+      <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch} placeholder="بحث بالاسم أو الهاتف..."/></div>
+      <div className="card table-container">
+        <table>
+          <thead><tr><th>#</th><th>الاسم</th><th>الهاتف</th><th>المواد</th><th>نوع العمولة</th><th>القيمة</th><th>إجراءات</th></tr></thead>
+          <tbody>
+            {filtered.map((t,i) => (
+              <tr key={t.id}>
+                <td>{i+1}</td>
+                <td className="font-medium">{t.full_name}</td>
+                <td>{t.phone || '-'}</td>
+                <td><div className="flex flex-wrap gap-1">{(t.teacher_subjects||[]).map(ts=><span key={ts.subject_id} className="badge bg-primary-50 text-primary-700">{ts.subjects?.name_ar}</span>)}</div></td>
+                <td>{t.commission_type==='percentage'?'نسبة مئوية':'مبلغ ثابت'}</td>
+                <td>{t.commission_type==='percentage'?t.commission_value+'%':formatMoney(t.commission_value)+' د.ع'}</td>
+                <td>
+                  <div className="flex gap-2">
+                    {hasPerm('teachers.edit') && <button onClick={()=>openEdit(t)} className="text-blue-600">{Icons.edit}</button>}
+                    {hasPerm('teachers.delete') && <button onClick={()=>setConfirmDel(t.id)} className="text-red-500">{Icons.trash}</button>}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا يوجد أساتذة</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title={editing?'تعديل بيانات الأستاذ':'إضافة أستاذ جديد'}>
+        <div className="space-y-4">
+          <div><label className="block text-sm font-medium mb-1">الاسم الكامل *</label><input className="input-field" value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></div>
+          <div><label className="block text-sm font-medium mb-1">رقم الهاتف</label><input className="input-field" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-sm font-medium mb-1">نوع حصة المعهد *</label>
+              <select className="input-field" value={form.commission_type} onChange={e=>setForm({...form,commission_type:e.target.value})}>
+                <option value="percentage">نسبة مئوية</option><option value="fixed">مبلغ ثابت</option>
+              </select>
+            </div>
+            <div><label className="block text-sm font-medium mb-1">{form.commission_type==='percentage'?'النسبة (%)':'المبلغ (د.ع)'} *</label>
+              <input className="input-field" type="number" value={form.commission_value} onChange={e=>setForm({...form,commission_value:e.target.value})}/>
+            </div>
+          </div>
+          <div><label className="block text-sm font-medium mb-2">المواد التي يدرسها</label>
+            <div className="flex flex-wrap gap-2">
+              {subjects.map(s=>(
+                <button key={s.id} onClick={()=>toggleSubject(s.id)}
+                  className={`px-3 py-1 rounded-full text-sm border transition ${form.subject_ids.includes(s.id)?'bg-primary-600 text-white border-primary-600':'bg-white text-gray-600 border-gray-300 hover:border-primary-400'}`}>
+                  {s.name_ar}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>{editing?'تحديث':'إضافة'}</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+        </div>
+      </Modal>
+      <ConfirmDialog isOpen={!!confirmDel} onConfirm={handleDelete} onCancel={()=>setConfirmDel(null)} message="هل أنت متأكد من حذف هذا الأستاذ؟"/>
+    </div>
+  );
+}
+
+// ============================================
+// SEAT RESERVATIONS PAGE
+// ============================================
+function ReservationsPage() {
+  const showToast = useContext(ToastContext);
+  const { activeYear } = useContext(YearContext);
+  const { user } = useContext(AuthContext);
+  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const [reservations, setReservations] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({ student_id:'', registration_id:'', amount:'', receipt_date: todayStr() });
+  const [studentRegs, setStudentRegs] = useState([]);
+  const [printData, setPrintData] = useState(null);
+
+  useEffect(() => { loadData(); }, [activeYear]);
+
+  const loadData = async () => {
+    setLoading(true);
+    const [rRes, sRes] = await Promise.all([
+      supabase.from('seat_reservations').select('*,students(full_name,grade_levels(name)),registrations(subjects(name_ar),teachers(full_name))').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
+      supabase.from('students').select('*').eq('academic_year_id', activeYear?.id).eq('is_active', true)
+    ]);
+    setReservations(rRes.data || []);
+    setStudents(sRes.data || []);
+    setLoading(false);
+  };
+
+  const onStudentSelect = async (sid) => {
+    setForm(f=>({...f, student_id: sid, registration_id:''}));
+    if(sid) {
+      const { data } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name)').eq('student_id', sid).eq('is_active', true);
+      setStudentRegs(data || []);
+    } else setStudentRegs([]);
+  };
+
+  const handleSave = async () => {
+    if(!form.student_id || !form.amount) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
+    const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'RES' });
+    const receiptNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
+    const { data, error } = await supabase.from('seat_reservations').insert({
+      receipt_number: receiptNum, student_id: form.student_id, registration_id: form.registration_id || null,
+      academic_year_id: activeYear.id, amount: parseInt(form.amount), receipt_date: form.receipt_date, created_by: user.user_id
+    }).select('*,students(full_name,grade_levels(name)),registrations(subjects(name_ar),teachers(full_name))').single();
+    if(error) { showToast('خطأ في الحفظ: ' + (error.message||''), 'error'); return; }
+    showToast('تم إنشاء وصل الحجز بنجاح');
+    setShowModal(false);
+    loadData();
+    if(data) setPrintData(data);
+  };
+
+  const filtered = reservations.filter(r => r.students?.full_name?.includes(search) || r.receipt_number?.includes(search));
+
+  if(loading) return <Loading/>;
+
+  return (
+    <div className="fade-in">
+      <PageHeader title="حجز المقاعد" action={hasPerm('reservations.add') ? ()=>{setForm({student_id:'',registration_id:'',amount:'',receipt_date:todayStr()});setStudentRegs([]);setShowModal(true)} : null} actionLabel="وصل حجز جديد"/>
+      <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch} placeholder="بحث بالاسم أو رقم الوصل..."/></div>
+      <div className="card table-container">
+        <table>
+          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المادة</th><th>الأستاذ</th><th>المبلغ</th><th>التاريخ</th><th>طباعة</th></tr></thead>
+          <tbody>
+            {filtered.map(r => (
+              <tr key={r.id}>
+                <td className="font-mono text-sm">{r.receipt_number}</td>
+                <td>{r.students?.full_name}</td>
+                <td>{r.registrations?.subjects?.name_ar || '-'}</td>
+                <td>{r.registrations?.teachers?.full_name || '-'}</td>
+                <td className="font-bold text-accent-600">{formatMoney(r.amount)} د.ع</td>
+                <td>{formatDate(r.receipt_date)}</td>
+                <td><button onClick={()=>setPrintData(r)} className="text-primary-600">{Icons.print}</button></td>
+              </tr>
+            ))}
+            {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا توجد حجوزات</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title="وصل حجز مقعد جديد">
+        <div className="space-y-4">
+          <div><label className="block text-sm font-medium mb-1">الطالب *</label>
+            <select className="input-field" value={form.student_id} onChange={e=>onStudentSelect(e.target.value)}>
+              <option value="">اختر الطالب</option>{students.map(s=><option key={s.id} value={s.id}>{s.full_name}</option>)}
+            </select>
+          </div>
+          {studentRegs.length > 0 && <div><label className="block text-sm font-medium mb-1">المادة (اختياري)</label>
+            <select className="input-field" value={form.registration_id} onChange={e=>setForm({...form,registration_id:e.target.value})}>
+              <option value="">بدون تحديد مادة</option>{studentRegs.map(r=><option key={r.id} value={r.id}>{r.subjects?.name_ar} - {r.teachers?.full_name}</option>)}
+            </select>
+          </div>}
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-sm font-medium mb-1">المبلغ (د.ع) *</label><input className="input-field" type="number" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})}/></div>
+            <div><label className="block text-sm font-medium mb-1">التاريخ</label><input className="input-field" type="date" value={form.receipt_date} onChange={e=>setForm({...form,receipt_date:e.target.value})}/></div>
+          </div>
+          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>إنشاء الوصل</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+        </div>
+      </Modal>
+      {/* Print Receipt */}
+      {printData && <ReceiptPrint type="reservation" data={printData} onClose={()=>setPrintData(null)}/>}
+    </div>
+  );
+}
+
+// ============================================
+// PAYMENTS PAGE
+// ============================================
+function PaymentsPage() {
+  const showToast = useContext(ToastContext);
+  const { activeYear } = useContext(YearContext);
+  const { user } = useContext(AuthContext);
+  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const [payments, setPayments] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({ student_id:'', total_amount:'', allocation_type:'equal', receipt_date: todayStr(), allocations:[] });
+  const [studentRegs, setStudentRegs] = useState([]);
+  const [printData, setPrintData] = useState(null);
+
+  useEffect(() => { loadData(); }, [activeYear]);
+
+  const loadData = async () => {
+    setLoading(true);
+    const [pRes, sRes] = await Promise.all([
+      supabase.from('payments').select('*,students(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
+      supabase.from('students').select('*').eq('academic_year_id', activeYear?.id).eq('is_active', true)
+    ]);
+    setPayments(pRes.data || []);
+    setStudents(sRes.data || []);
+    setLoading(false);
+  };
+
+  const onStudentSelect = async (sid) => {
+    setForm(f=>({...f, student_id:sid, allocations:[]}));
+    if(sid) {
+      const { data } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name,commission_type,commission_value)').eq('student_id', sid).eq('is_active', true);
+      setStudentRegs(data || []);
+    } else setStudentRegs([]);
+  };
+
+  const handleSave = async () => {
+    if(!form.student_id || !form.total_amount) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
+    if(studentRegs.length === 0) { showToast('الطالب غير مسجل في أي مادة', 'error'); return; }
+
+    const total = parseInt(form.total_amount);
+    let allocs = [];
+
+    if(form.allocation_type === 'equal') {
+      const perSubject = Math.floor(total / studentRegs.length);
+      let remainder = total - (perSubject * studentRegs.length);
+      allocs = studentRegs.map((r, i) => {
+        const amt = perSubject + (i === 0 ? remainder : 0);
+        const instShare = r.teachers?.commission_type === 'percentage'
+          ? Math.round(amt * r.teachers.commission_value / 100)
+          : Math.round(amt * r.institute_share / r.total_tuition);
+        return { registration_id: r.id, amount: amt, institute_share: instShare, teacher_share: amt - instShare };
+      });
+    } else {
+      allocs = form.allocations.filter(a => a.amount > 0).map(a => {
+        const reg = studentRegs.find(r => r.id === a.registration_id);
+        const amt = parseInt(a.amount);
+        const instShare = reg?.teachers?.commission_type === 'percentage'
+          ? Math.round(amt * reg.teachers.commission_value / 100)
+          : Math.round(amt * reg.institute_share / reg.total_tuition);
+        return { registration_id: a.registration_id, amount: amt, institute_share: instShare, teacher_share: amt - instShare };
+      });
+    }
+
+    const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'PAY' });
+    const receiptNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
+
+    const { data: payment, error } = await supabase.from('payments').insert({
+      receipt_number: receiptNum, student_id: form.student_id, academic_year_id: activeYear.id,
+      total_amount: total, allocation_type: form.allocation_type, receipt_date: form.receipt_date, created_by: user.user_id
+    }).select('*,students(full_name)').single();
+
+    if(error) { showToast('خطأ في الحفظ', 'error'); return; }
+
+    // Insert allocations
+    if(allocs.length > 0) {
+      await supabase.from('payment_allocations').insert(allocs.map(a=>({...a, payment_id: payment.id})));
+    }
+
+    showToast('تم إنشاء وصل الدفع بنجاح');
+    setShowModal(false);
+    loadData();
+  };
+
+  const filtered = payments.filter(p => p.students?.full_name?.includes(search) || p.receipt_number?.includes(search));
+
+  if(loading) return <Loading/>;
+
+  return (
+    <div className="fade-in">
+      <PageHeader title="دفعات الطلاب" action={hasPerm('payments.add') ? ()=>{setForm({student_id:'',total_amount:'',allocation_type:'equal',receipt_date:todayStr(),allocations:[]});setStudentRegs([]);setShowModal(true)} : null} actionLabel="وصل دفع جديد"/>
+      <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch}/></div>
+      <div className="card table-container">
+        <table>
+          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المبلغ</th><th>نوع التوزيع</th><th>التاريخ</th><th>طباعة</th></tr></thead>
+          <tbody>
+            {filtered.map(p => (
+              <tr key={p.id}>
+                <td className="font-mono text-sm">{p.receipt_number}</td>
+                <td>{p.students?.full_name}</td>
+                <td className="font-bold text-accent-600">{formatMoney(p.total_amount)} د.ع</td>
+                <td>{p.allocation_type==='equal'?'توزيع متساوي':'توزيع يدوي'}</td>
+                <td>{formatDate(p.receipt_date)}</td>
+                <td><button onClick={()=>setPrintData(p)} className="text-primary-600">{Icons.print}</button></td>
+              </tr>
+            ))}
+            {filtered.length===0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400">لا توجد دفعات</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title="وصل تسديد قسط جديد" wide>
+        <div className="space-y-4">
+          <div><label className="block text-sm font-medium mb-1">الطالب *</label>
+            <select className="input-field" value={form.student_id} onChange={e=>onStudentSelect(e.target.value)}>
+              <option value="">اختر الطالب</option>{students.map(s=><option key={s.id} value={s.id}>{s.full_name}</option>)}
+            </select>
+          </div>
+          {studentRegs.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-sm text-gray-600 mb-2">المواد المسجلة:</p>
+              {studentRegs.map(r=>(
+                <div key={r.id} className="flex justify-between text-sm py-1">
+                  <span>{r.subjects?.name_ar} - {r.teachers?.full_name}</span>
+                  <span>المتبقي: <b className="text-red-500">{formatMoney(r.remaining_balance)} د.ع</b></span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-sm font-medium mb-1">المبلغ الكلي (د.ع) *</label><input className="input-field" type="number" value={form.total_amount} onChange={e=>setForm({...form,total_amount:e.target.value})}/></div>
+            <div><label className="block text-sm font-medium mb-1">التاريخ</label><input className="input-field" type="date" value={form.receipt_date} onChange={e=>setForm({...form,receipt_date:e.target.value})}/></div>
+          </div>
+          <div><label className="block text-sm font-medium mb-1">طريقة التوزيع</label>
+            <select className="input-field" value={form.allocation_type} onChange={e=>{
+              const t = e.target.value;
+              setForm(f=>({...f, allocation_type:t, allocations: t==='manual' ? studentRegs.map(r=>({registration_id:r.id, amount:''})) : []}));
+            }}>
+              <option value="equal">توزيع متساوي على جميع المواد</option>
+              <option value="manual">توزيع يدوي</option>
+            </select>
+          </div>
+          {form.allocation_type === 'manual' && studentRegs.map((r, i) => (
+            <div key={r.id} className="flex items-center gap-3">
+              <span className="text-sm flex-1">{r.subjects?.name_ar} - {r.teachers?.full_name}</span>
+              <input className="input-field w-40" type="number" placeholder="المبلغ" value={form.allocations[i]?.amount||''} onChange={e=>{
+                const allocs = [...form.allocations];
+                allocs[i] = {...allocs[i], amount: e.target.value};
+                setForm({...form, allocations: allocs});
+              }}/>
+            </div>
+          ))}
+          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>إنشاء الوصل</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+        </div>
+      </Modal>
+      {printData && <ReceiptPrint type="payment" data={printData} onClose={()=>setPrintData(null)}/>}
+    </div>
+  );
+}
+
+// ============================================
+// TEACHER PAYOUTS PAGE
+// ============================================
+function PayoutsPage() {
+  const showToast = useContext(ToastContext);
+  const { activeYear } = useContext(YearContext);
+  const { user } = useContext(AuthContext);
+  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const [payouts, setPayouts] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({ teacher_id:'', amount:'', payout_date: todayStr(), notes:'' });
+  const [teacherBalance, setTeacherBalance] = useState(0);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => { loadData(); }, [activeYear]);
+
+  const loadData = async () => {
+    setLoading(true);
+    const [pRes, tRes] = await Promise.all([
+      supabase.from('teacher_payouts').select('*,teachers(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
+      supabase.from('teachers').select('*').eq('is_active', true)
+    ]);
+    setPayouts(pRes.data || []);
+    setTeachers(tRes.data || []);
+    setLoading(false);
+  };
+
+  const onTeacherSelect = async (tid) => {
+    setForm(f=>({...f, teacher_id: tid}));
+    if(tid) {
+      const { data } = await supabase.rpc('get_teacher_balance', { p_teacher_id: tid, p_year_id: activeYear.id });
+      setTeacherBalance(typeof data === 'number' ? data : (Array.isArray(data) ? data[0] : 0));
+    } else setTeacherBalance(0);
+  };
+
+  const handleSave = async () => {
+    if(!form.teacher_id || !form.amount) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
+    const amt = parseInt(form.amount);
+    const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'TOUT' });
+    const voucherNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
+    const { error } = await supabase.from('teacher_payouts').insert({
+      voucher_number: voucherNum, teacher_id: form.teacher_id, academic_year_id: activeYear.id,
+      amount: amt, balance_before: teacherBalance, balance_after: teacherBalance - amt,
+      payout_date: form.payout_date, notes: form.notes, created_by: user.user_id
+    });
+    if(error) { showToast('خطأ في الحفظ', 'error'); return; }
+    showToast('تم إنشاء وصل الصرف بنجاح');
+    setShowModal(false); loadData();
+  };
+
+  const filtered = payouts.filter(p => p.teachers?.full_name?.includes(search) || p.voucher_number?.includes(search));
+
+  if(loading) return <Loading/>;
+
+  return (
+    <div className="fade-in">
+      <PageHeader title="صرف الأساتذة" action={hasPerm('payouts.add') ? ()=>{setForm({teacher_id:'',amount:'',payout_date:todayStr(),notes:''});setTeacherBalance(0);setShowModal(true)} : null} actionLabel="وصل صرف جديد"/>
+      <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch}/></div>
+      <div className="card table-container">
+        <table>
+          <thead><tr><th>رقم الوصل</th><th>الأستاذ</th><th>المبلغ</th><th>الرصيد قبل</th><th>الرصيد بعد</th><th>التاريخ</th></tr></thead>
+          <tbody>
+            {filtered.map(p => (
+              <tr key={p.id}>
+                <td className="font-mono text-sm">{p.voucher_number}</td>
+                <td>{p.teachers?.full_name}</td>
+                <td className="font-bold text-red-500">{formatMoney(p.amount)} د.ع</td>
+                <td>{formatMoney(p.balance_before)} د.ع</td>
+                <td>{formatMoney(p.balance_after)} د.ع</td>
+                <td>{formatDate(p.payout_date)}</td>
+              </tr>
+            ))}
+            {filtered.length===0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400">لا توجد صرفيات</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title="وصل صرف أستاذ جديد">
+        <div className="space-y-4">
+          <div><label className="block text-sm font-medium mb-1">الأستاذ *</label>
+            <select className="input-field" value={form.teacher_id} onChange={e=>onTeacherSelect(e.target.value)}>
+              <option value="">اختر الأستاذ</option>{teachers.map(t=><option key={t.id} value={t.id}>{t.full_name}</option>)}
+            </select>
+          </div>
+          {form.teacher_id && <div className="bg-blue-50 rounded-lg p-3 text-center">
+            <p className="text-sm text-gray-600">رصيد الأستاذ الحالي</p>
+            <p className="text-2xl font-bold text-primary-700">{formatMoney(teacherBalance)} د.ع</p>
+          </div>}
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-sm font-medium mb-1">مبلغ الصرف (د.ع) *</label><input className="input-field" type="number" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})}/></div>
+            <div><label className="block text-sm font-medium mb-1">التاريخ</label><input className="input-field" type="date" value={form.payout_date} onChange={e=>setForm({...form,payout_date:e.target.value})}/></div>
+          </div>
+          <div><label className="block text-sm font-medium mb-1">ملاحظات</label><input className="input-field" value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="صرف مستحقات تدريس"/></div>
+          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>إنشاء الوصل</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ============================================
+// EXPENSES PAGE
+// ============================================
+function ExpensesPage() {
+  const showToast = useContext(ToastContext);
+  const { activeYear } = useContext(YearContext);
+  const { user } = useContext(AuthContext);
+  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const [expenses, setExpenses] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [filterCat, setFilterCat] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({ category_id:'', amount:'', recipient:'', description:'', expense_date: todayStr() });
+
+  useEffect(() => { loadData(); }, [activeYear]);
+
+  const loadData = async () => {
+    setLoading(true);
+    const [eRes, cRes] = await Promise.all([
+      supabase.from('expenses').select('*,expense_categories(name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
+      supabase.from('expense_categories').select('*').eq('is_active', true).order('sort_order', {ascending:true})
+    ]);
+    setExpenses(eRes.data || []);
+    setCategories(cRes.data || []);
+    setLoading(false);
+  };
+
+  const handleSave = async () => {
+    if(!form.category_id || !form.amount) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
+    const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'EXP' });
+    const voucherNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
+    const { error } = await supabase.from('expenses').insert({
+      voucher_number: voucherNum, category_id: form.category_id, academic_year_id: activeYear.id,
+      amount: parseInt(form.amount), recipient: form.recipient, description: form.description,
+      expense_date: form.expense_date, created_by: user.user_id
+    });
+    if(error) { showToast('خطأ في الحفظ', 'error'); return; }
+    showToast('تم إنشاء وصل المصروف بنجاح');
+    setShowModal(false); loadData();
+  };
+
+  const filtered = expenses.filter(e => {
+    const matchSearch = !search || e.expense_categories?.name?.includes(search) || e.recipient?.includes(search) || e.voucher_number?.includes(search);
+    const matchCat = !filterCat || e.category_id === filterCat;
+    return matchSearch && matchCat;
+  });
+
+  const totalFiltered = filtered.reduce((s, e) => s + e.amount, 0);
+
+  if(loading) return <Loading/>;
+
+  return (
+    <div className="fade-in">
+      <PageHeader title="المصروفات" action={hasPerm('expenses.add') ? ()=>{setForm({category_id:'',amount:'',recipient:'',description:'',expense_date:todayStr()});setShowModal(true)} : null} actionLabel="وصل مصروف جديد"/>
+      <div className="card p-4 mb-4 flex flex-wrap gap-3">
+        <div className="flex-1 min-w-[200px]"><SearchInput value={search} onChange={setSearch}/></div>
+        <select className="input-field w-auto" value={filterCat} onChange={e=>setFilterCat(e.target.value)}>
+          <option value="">جميع الأصناف</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      <div className="card p-3 mb-4 flex justify-between items-center bg-red-50">
+        <span className="text-gray-700 font-medium">إجمالي المصروفات المعروضة</span>
+        <span className="text-xl font-bold text-red-600">{formatMoney(totalFiltered)} د.ع</span>
+      </div>
+      <div className="card table-container">
+        <table>
+          <thead><tr><th>رقم الوصل</th><th>الصنف</th><th>المبلغ</th><th>المستلم</th><th>الوصف</th><th>التاريخ</th></tr></thead>
+          <tbody>
+            {filtered.map(e => (
+              <tr key={e.id}>
+                <td className="font-mono text-sm">{e.voucher_number}</td>
+                <td><span className="badge bg-red-50 text-red-700">{e.expense_categories?.name}</span></td>
+                <td className="font-bold text-red-500">{formatMoney(e.amount)} د.ع</td>
+                <td>{e.recipient || '-'}</td>
+                <td className="text-sm text-gray-500">{e.description || '-'}</td>
+                <td>{formatDate(e.expense_date)}</td>
+              </tr>
+            ))}
+            {filtered.length===0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400">لا توجد مصروفات</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title="وصل مصروف جديد">
+        <div className="space-y-4">
+          <div><label className="block text-sm font-medium mb-1">صنف المصروف *</label>
+            <select className="input-field" value={form.category_id} onChange={e=>setForm({...form,category_id:e.target.value})}>
+              <option value="">اختر الصنف</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-sm font-medium mb-1">المبلغ (د.ع) *</label><input className="input-field" type="number" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})}/></div>
+            <div><label className="block text-sm font-medium mb-1">التاريخ</label><input className="input-field" type="date" value={form.expense_date} onChange={e=>setForm({...form,expense_date:e.target.value})}/></div>
+          </div>
+          <div><label className="block text-sm font-medium mb-1">اسم المستلم</label><input className="input-field" value={form.recipient} onChange={e=>setForm({...form,recipient:e.target.value})}/></div>
+          <div><label className="block text-sm font-medium mb-1">وصف / ملاحظات</label><input className="input-field" value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></div>
+          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>إنشاء الوصل</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ============================================
+// REPORTS PAGE
+// ============================================
+function ReportsPage() {
+  const { activeYear } = useContext(YearContext);
+  const [activeReport, setActiveReport] = useState('late_payments');
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [students, setStudents] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [selectedStudent, setSelectedStudent] = useState('');
+  const [selectedTeacher, setSelectedTeacher] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [studentStmt, setStudentStmt] = useState(null);
+  const [teacherStmt, setTeacherStmt] = useState(null);
+
+  useEffect(() => {
+    loadLists();
+  }, [activeYear]);
+
+  const loadLists = async () => {
+    const [sRes, tRes] = await Promise.all([
+      supabase.from('students').select('id,full_name').eq('academic_year_id', activeYear?.id).eq('is_active', true),
+      supabase.from('teachers').select('id,full_name').eq('is_active', true)
+    ]);
+    setStudents(sRes.data || []);
+    setTeachers(tRes.data || []);
+  };
+
+  const loadLatePayments = async () => {
+    setLoading(true);
+    const { data: regs } = await supabase.from('registrations').select('*,students(full_name,grade_levels(name)),subjects(name_ar),teachers(full_name)')
+      .eq('academic_year_id', activeYear?.id).eq('is_active', true).gt('remaining_balance', 0).order('remaining_balance', {ascending:false});
+    setData(regs || []);
+    setLoading(false);
+  };
+
+  const loadStudentStatement = async () => {
+    if(!selectedStudent) return;
+    setLoading(true);
+    const { data: regs } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name)')
+      .eq('student_id', selectedStudent).eq('academic_year_id', activeYear?.id);
+    const { data: payments } = await supabase.from('payment_allocations').select('*,payments(receipt_number,receipt_date,total_amount)')
+      .in('registration_id', (regs||[]).map(r=>r.id));
+    const { data: reservs } = await supabase.from('seat_reservations').select('*').eq('student_id', selectedStudent).eq('is_deleted', false);
+    const { data: student } = await supabase.from('students').select('*,grade_levels(name)').eq('id', selectedStudent).single();
+    setStudentStmt({ student, registrations: regs||[], payments: payments||[], reservations: reservs||[] });
+    setLoading(false);
+  };
+
+  const loadTeacherStatement = async () => {
+    if(!selectedTeacher) return;
+    setLoading(true);
+    const { data: regs } = await supabase.from('registrations').select('*,students(full_name,grade_levels(name)),subjects(name_ar)')
+      .eq('teacher_id', selectedTeacher).eq('academic_year_id', activeYear?.id);
+    const { data: payouts } = await supabase.from('teacher_payouts').select('*')
+      .eq('teacher_id', selectedTeacher).eq('is_deleted', false).order('created_at', {ascending: true});
+    const { data: teacher } = await supabase.from('teachers').select('*').eq('id', selectedTeacher).single();
+    const { data: balance } = await supabase.rpc('get_teacher_balance', { p_teacher_id: selectedTeacher, p_year_id: activeYear.id });
+    setTeacherStmt({ teacher, registrations: regs||[], payouts: payouts||[], balance: typeof balance === 'number' ? balance : 0 });
+    setLoading(false);
+  };
+
+  const loadRevenueReport = async () => {
+    setLoading(true);
+    const [seatRes, payRes] = await Promise.all([
+      supabase.from('seat_reservations').select('*,students(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false)
+        .order('receipt_date', {ascending:false}),
+      supabase.from('payment_allocations').select('*,payments(receipt_number,receipt_date,students(full_name)),registrations(subjects(name_ar))')
+    ]);
+    setData({ seats: seatRes.data||[], payments: payRes.data||[] });
+    setLoading(false);
+  };
+
+  const loadExpenseReport = async () => {
+    setLoading(true);
+    const { data: exps } = await supabase.from('expenses').select('*,expense_categories(name)')
+      .eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('expense_date', {ascending:false});
+    setData(exps || []);
+    setLoading(false);
+  };
+
+  const loadPnl = async () => {
+    setLoading(true);
+    // Revenue
+    const { data: seats } = await supabase.from('seat_reservations').select('amount').eq('academic_year_id', activeYear?.id).eq('is_deleted', false);
+    const { data: payAllocs } = await supabase.from('payment_allocations').select('institute_share,payments!inner(academic_year_id,is_deleted)')
+      .eq('payments.academic_year_id', activeYear?.id).eq('payments.is_deleted', false);
+    // Expenses
+    const { data: exps } = await supabase.from('expenses').select('amount,expense_categories(name)')
+      .eq('academic_year_id', activeYear?.id).eq('is_deleted', false);
+
+    const totalSeats = (seats||[]).reduce((s,r)=>s+r.amount, 0);
+    const totalInstShare = (payAllocs||[]).reduce((s,r)=>s+r.institute_share, 0);
+    const totalExpenses = (exps||[]).reduce((s,r)=>s+r.amount, 0);
+    // Group expenses by category
+    const expByCat = {};
+    (exps||[]).forEach(e => {
+      const cat = e.expense_categories?.name || 'أخرى';
+      expByCat[cat] = (expByCat[cat]||0) + e.amount;
+    });
+    setData({ totalSeats, totalInstShare, totalRevenue: totalSeats + totalInstShare, totalExpenses, netProfit: totalSeats + totalInstShare - totalExpenses, expByCat });
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    setData([]); setStudentStmt(null); setTeacherStmt(null);
+    if(activeReport === 'late_payments') loadLatePayments();
+    else if(activeReport === 'revenue') loadRevenueReport();
+    else if(activeReport === 'expenses') loadExpenseReport();
+    else if(activeReport === 'pnl') loadPnl();
+  }, [activeReport, activeYear]);
+
+  const reports = [
+    { id: 'late_payments', label: 'المتأخرين عن الدفع' },
+    { id: 'student_stmt', label: 'كشف حساب طالب' },
+    { id: 'teacher_stmt', label: 'كشف حساب أستاذ' },
+    { id: 'revenue', label: 'تقرير الإيرادات' },
+    { id: 'expenses', label: 'تقرير المصروفات' },
+    { id: 'pnl', label: 'الأرباح والخسائر' },
+  ];
+
+  return (
+    <div className="fade-in">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">التقارير</h2>
+      <div className="flex flex-wrap gap-2 mb-6">
+        {reports.map(r => (
+          <button key={r.id} onClick={()=>setActiveReport(r.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeReport===r.id?'bg-primary-600 text-white':'bg-white text-gray-600 hover:bg-gray-100'}`}>
+            {r.label}
+          </button>
+        ))}
+      </div>
+
+      {loading && <Loading/>}
+
+      {/* Late Payments */}
+      {activeReport === 'late_payments' && !loading && Array.isArray(data) && (
+        <div className="card table-container">
+          <table>
+            <thead><tr><th>الطالب</th><th>المرحلة</th><th>المادة</th><th>الأستاذ</th><th>القسط الكلي</th><th>المدفوع</th><th>المتبقي</th></tr></thead>
+            <tbody>
+              {data.map(r => (
+                <tr key={r.id}>
+                  <td className="font-medium">{r.students?.full_name}</td>
+                  <td>{r.students?.grade_levels?.name}</td>
+                  <td>{r.subjects?.name_ar}</td>
+                  <td>{r.teachers?.full_name}</td>
+                  <td>{formatMoney(r.total_tuition)}</td>
+                  <td className="text-green-600">{formatMoney(r.total_paid)}</td>
+                  <td className="font-bold text-red-500">{formatMoney(r.remaining_balance)} د.ع</td>
+                </tr>
+              ))}
+              {data.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا يوجد متأخرين</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Student Statement */}
+      {activeReport === 'student_stmt' && !loading && (
+        <div>
+          <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium mb-1">اختر الطالب</label>
+              <select className="input-field" value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}>
+                <option value="">اختر...</option>{students.map(s=><option key={s.id} value={s.id}>{s.full_name}</option>)}
+              </select>
+            </div>
+            <button className="btn-primary" onClick={loadStudentStatement}>عرض الكشف</button>
+            {studentStmt && <button className="btn-ghost flex items-center gap-1" onClick={()=>window.print()}>{Icons.print} طباعة</button>}
+          </div>
+          {studentStmt && (
+            <div className="card p-6 print-receipt">
+              <div className="text-center mb-6 border-b pb-4">
+                <h3 className="text-xl font-bold text-primary-700">معهد كايزن - Kaizen Institute</h3>
+                <p className="text-sm text-gray-500">بغداد - الدورة - جمعية خير الله | 07755757941</p>
+                <h4 className="text-lg font-bold mt-2">كشف حساب طالب</h4>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                <div><b>الطالب:</b> {studentStmt.student?.full_name}</div>
+                <div><b>المرحلة:</b> {studentStmt.student?.grade_levels?.name}</div>
+                <div><b>هاتف الطالب:</b> {studentStmt.student?.student_phone || '-'}</div>
+                <div><b>هاتف ولي الأمر:</b> {studentStmt.student?.parent_phone || '-'}</div>
+              </div>
+              <h5 className="font-bold text-gray-700 mt-4 mb-2">المواد المسجلة</h5>
+              <table>
+                <thead><tr><th>المادة</th><th>الأستاذ</th><th>القسط</th><th>المدفوع</th><th>المتبقي</th></tr></thead>
+                <tbody>
+                  {studentStmt.registrations.map(r=>(
+                    <tr key={r.id}>
+                      <td>{r.subjects?.name_ar}</td><td>{r.teachers?.full_name}</td>
+                      <td>{formatMoney(r.total_tuition)}</td>
+                      <td className="text-green-600">{formatMoney(r.total_paid)}</td>
+                      <td className="text-red-500 font-bold">{formatMoney(r.remaining_balance)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg flex justify-between">
+                <span>إجمالي المدفوع: <b className="text-green-600">{formatMoney(studentStmt.registrations.reduce((s,r)=>s+r.total_paid,0))} د.ع</b></span>
+                <span>إجمالي المتبقي: <b className="text-red-500">{formatMoney(studentStmt.registrations.reduce((s,r)=>s+r.remaining_balance,0))} د.ع</b></span>
+              </div>
+              {studentStmt.reservations.length > 0 && <>
+                <h5 className="font-bold text-gray-700 mt-4 mb-2">حجوزات المقاعد</h5>
+                <table>
+                  <thead><tr><th>رقم الوصل</th><th>المبلغ</th><th>التاريخ</th></tr></thead>
+                  <tbody>{studentStmt.reservations.map(r=><tr key={r.id}><td>{r.receipt_number}</td><td>{formatMoney(r.amount)} د.ع</td><td>{formatDate(r.receipt_date)}</td></tr>)}</tbody>
+                </table>
+              </>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Teacher Statement */}
+      {activeReport === 'teacher_stmt' && !loading && (
+        <div>
+          <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium mb-1">اختر الأستاذ</label>
+              <select className="input-field" value={selectedTeacher} onChange={e=>setSelectedTeacher(e.target.value)}>
+                <option value="">اختر...</option>{teachers.map(t=><option key={t.id} value={t.id}>{t.full_name}</option>)}
+              </select>
+            </div>
+            <button className="btn-primary" onClick={loadTeacherStatement}>عرض الكشف</button>
+            {teacherStmt && <button className="btn-ghost flex items-center gap-1" onClick={()=>window.print()}>{Icons.print} طباعة</button>}
+          </div>
+          {teacherStmt && (
+            <div className="card p-6 print-receipt">
+              <div className="text-center mb-6 border-b pb-4">
+                <h3 className="text-xl font-bold text-primary-700">معهد كايزن - Kaizen Institute</h3>
+                <p className="text-sm text-gray-500">بغداد - الدورة - جمعية خير الله | 07755757941</p>
+                <h4 className="text-lg font-bold mt-2">كشف حساب أستاذ</h4>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                <div><b>الأستاذ:</b> {teacherStmt.teacher?.full_name}</div>
+                <div><b>الهاتف:</b> {teacherStmt.teacher?.phone || '-'}</div>
+                <div><b>نوع العمولة:</b> {teacherStmt.teacher?.commission_type==='percentage'?'نسبة مئوية':'مبلغ ثابت'}</div>
+                <div><b>القيمة:</b> {teacherStmt.teacher?.commission_type==='percentage'?teacherStmt.teacher?.commission_value+'%':formatMoney(teacherStmt.teacher?.commission_value)+' د.ع'}</div>
+              </div>
+              <h5 className="font-bold text-gray-700 mt-4 mb-2">الطلاب المسجلين</h5>
+              <table>
+                <thead><tr><th>الطالب</th><th>المرحلة</th><th>المادة</th><th>القسط</th><th>حصة المعهد</th><th>حصة الأستاذ</th><th>المدفوع</th></tr></thead>
+                <tbody>
+                  {teacherStmt.registrations.map(r=>(
+                    <tr key={r.id}>
+                      <td>{r.students?.full_name}</td><td>{r.students?.grade_levels?.name}</td><td>{r.subjects?.name_ar}</td>
+                      <td>{formatMoney(r.total_tuition)}</td><td>{formatMoney(r.institute_share)}</td><td>{formatMoney(r.teacher_share)}</td>
+                      <td>{formatMoney(r.total_paid)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {teacherStmt.payouts.length > 0 && <>
+                <h5 className="font-bold text-gray-700 mt-4 mb-2">سجل الصرفيات</h5>
+                <table>
+                  <thead><tr><th>رقم الوصل</th><th>المبلغ</th><th>الرصيد بعد</th><th>التاريخ</th></tr></thead>
+                  <tbody>{teacherStmt.payouts.map(p=><tr key={p.id}><td>{p.voucher_number}</td><td>{formatMoney(p.amount)} د.ع</td><td>{formatMoney(p.balance_after)} د.ع</td><td>{formatDate(p.payout_date)}</td></tr>)}</tbody>
+                </table>
+              </>}
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg text-center">
+                <p className="text-sm text-gray-600">الرصيد الحالي المستحق</p>
+                <p className="text-3xl font-bold text-primary-700">{formatMoney(teacherStmt.balance)} د.ع</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* P&L */}
+      {activeReport === 'pnl' && !loading && data.totalRevenue !== undefined && (
+        <div className="card p-6 print-receipt">
+          <div className="text-center mb-6 border-b pb-4">
+            <h3 className="text-xl font-bold text-primary-700">معهد كايزن - Kaizen Institute</h3>
+            <h4 className="text-lg font-bold mt-2">تقرير الأرباح والخسائر - {activeYear?.name}</h4>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="p-4 bg-green-50 rounded-lg text-center">
+              <p className="text-sm text-gray-600">إجمالي الإيرادات</p>
+              <p className="text-2xl font-bold text-green-600">{formatMoney(data.totalRevenue)} د.ع</p>
+              <p className="text-xs text-gray-500 mt-1">حجوزات: {formatMoney(data.totalSeats)} | أقساط: {formatMoney(data.totalInstShare)}</p>
+            </div>
+            <div className="p-4 bg-red-50 rounded-lg text-center">
+              <p className="text-sm text-gray-600">إجمالي المصروفات</p>
+              <p className="text-2xl font-bold text-red-600">{formatMoney(data.totalExpenses)} د.ع</p>
+            </div>
+            <div className={`p-4 rounded-lg text-center ${data.netProfit >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
+              <p className="text-sm text-gray-600">صافي الربح</p>
+              <p className={`text-2xl font-bold ${data.netProfit >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>{formatMoney(data.netProfit)} د.ع</p>
+            </div>
+          </div>
+          {data.expByCat && Object.keys(data.expByCat).length > 0 && (
+            <div>
+              <h5 className="font-bold text-gray-700 mb-2">تفصيل المصروفات</h5>
+              <table>
+                <thead><tr><th>الصنف</th><th>المبلغ</th></tr></thead>
+                <tbody>
+                  {Object.entries(data.expByCat).map(([cat, amt]) => (
+                    <tr key={cat}><td>{cat}</td><td className="font-bold text-red-500">{formatMoney(amt)} د.ع</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Revenue Report */}
+      {activeReport === 'revenue' && !loading && data.seats && (
+        <div className="card p-4">
+          <div className="p-3 mb-4 bg-green-50 rounded-lg flex justify-between">
+            <span>إجمالي حجوزات المقاعد: <b className="text-green-600">{formatMoney(data.seats.reduce((s,r)=>s+r.amount,0))} د.ع</b></span>
+            <span>إجمالي حصة المعهد من الأقساط: <b className="text-green-600">{formatMoney(data.payments.reduce((s,r)=>s+r.institute_share,0))} د.ع</b></span>
+          </div>
+          <h5 className="font-bold mb-2">حجوزات المقاعد</h5>
+          <table><thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المبلغ</th><th>التاريخ</th></tr></thead>
+            <tbody>{data.seats.map(s=><tr key={s.id}><td>{s.receipt_number}</td><td>{s.students?.full_name}</td><td>{formatMoney(s.amount)} د.ع</td><td>{formatDate(s.receipt_date)}</td></tr>)}</tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Expense Report */}
+      {activeReport === 'expenses' && !loading && Array.isArray(data) && (
+        <div className="card p-4">
+          <div className="p-3 mb-4 bg-red-50 rounded-lg">
+            <span>إجمالي المصروفات: <b className="text-red-600">{formatMoney(data.reduce((s,e)=>s+e.amount,0))} د.ع</b></span>
+          </div>
+          <table><thead><tr><th>رقم الوصل</th><th>الصنف</th><th>المبلغ</th><th>المستلم</th><th>التاريخ</th></tr></thead>
+            <tbody>{data.map(e=><tr key={e.id}><td>{e.voucher_number}</td><td>{e.expense_categories?.name}</td><td>{formatMoney(e.amount)} د.ع</td><td>{e.recipient||'-'}</td><td>{formatDate(e.expense_date)}</td></tr>)}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// SETTINGS PAGE
+// ============================================
+function SettingsPage() {
+  const showToast = useContext(ToastContext);
+  const { activeYear, years, setYears, setActiveYear } = useContext(YearContext);
+  const [tab, setTab] = useState('years');
+  const [subjects, setSubjects] = useState([]);
+  const [grades, setGrades] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [settings, setSettings] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState('');
+  const [form, setForm] = useState({});
+
+  useEffect(() => { loadAll(); }, []);
+
+  const loadAll = async () => {
+    setLoading(true);
+    const [subRes, grRes, catRes, setRes] = await Promise.all([
+      supabase.from('subjects').select('*').eq('is_active', true).order('sort_order', {ascending:true}),
+      supabase.from('grade_levels').select('*').eq('is_active', true).order('sort_order', {ascending:true}),
+      supabase.from('expense_categories').select('*').eq('is_active', true).order('sort_order', {ascending:true}),
+      supabase.from('institute_settings').select('*').limit(1).single()
+    ]);
+    setSubjects(subRes.data||[]);
+    setGrades(grRes.data||[]);
+    setCategories(catRes.data||[]);
+    setSettings(setRes.data);
+    setLoading(false);
+  };
+
+  const openAdd = (type) => {
+    setModalType(type);
+    if(type==='year') setForm({ name:'', start_date:'', end_date:'' });
+    else if(type==='subject') setForm({ name_ar:'', name_en:'' });
+    else if(type==='grade') setForm({ name:'' });
+    else if(type==='category') setForm({ name:'' });
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    if(modalType==='year') {
+      if(!form.name) { showToast('يرجى إدخال اسم السنة', 'error'); return; }
+      const { data } = await supabase.from('academic_years').insert(form).select().single();
+      if(data) { const newYears = [...years, data]; setYears(newYears); }
+      showToast('تم إضافة السنة الدراسية');
+    } else if(modalType==='subject') {
+      await supabase.from('subjects').insert({ name_ar: form.name_ar, name_en: form.name_en, sort_order: subjects.length+1 });
+      showToast('تم إضافة المادة');
+    } else if(modalType==='grade') {
+      await supabase.from('grade_levels').insert({ name: form.name, sort_order: grades.length+1 });
+      showToast('تم إضافة المرحلة');
+    } else if(modalType==='category') {
+      await supabase.from('expense_categories').insert({ name: form.name, sort_order: categories.length+1 });
+      showToast('تم إضافة الصنف');
+    }
+    setShowModal(false); loadAll();
+  };
+
+  const setActiveYearFn = async (yearId) => {
+    await supabase.from('academic_years').update({ is_active: false }).neq('id', 'none');
+    await supabase.from('academic_years').update({ is_active: true }).eq('id', yearId);
+    const { data: updatedYears } = await supabase.from('academic_years').select('*').order('name', {ascending:false});
+    setYears(updatedYears||[]);
+    const active = (updatedYears||[]).find(y=>y.is_active);
+    if(active) setActiveYear(active);
+    showToast('تم تعيين السنة الدراسية الفعالة');
+  };
+
+  const saveSettings = async () => {
+    if(!settings) return;
+    await supabase.from('institute_settings').update({
+      name_ar: settings.name_ar, name_en: settings.name_en, address: settings.address, phone: settings.phone
+    }).eq('id', settings.id);
+    showToast('تم حفظ إعدادات المعهد');
+  };
+
+  if(loading) return <Loading/>;
+
+  const tabs = [
+    { id:'years', label:'السنوات الدراسية' },
+    { id:'subjects', label:'المواد' },
+    { id:'grades', label:'المراحل' },
+    { id:'categories', label:'أصناف المصروفات' },
+    { id:'institute', label:'معلومات المعهد' },
+  ];
+
+  return (
+    <div className="fade-in">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">الإعدادات</h2>
+      <div className="flex flex-wrap gap-2 mb-6">
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab===t.id?'bg-primary-600 text-white':'bg-white text-gray-600 hover:bg-gray-100'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'years' && (
+        <div className="card p-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold">السنوات الدراسية</h3>
+            <button className="btn-primary flex items-center gap-1" onClick={()=>openAdd('year')}>{Icons.plus} إضافة سنة</button>
+          </div>
+          {years.map(y => (
+            <div key={y.id} className={`flex justify-between items-center p-3 rounded-lg mb-2 ${y.is_active?'bg-green-50 border border-green-200':'bg-gray-50'}`}>
+              <div><span className="font-bold">{y.name}</span>{y.is_active && <span className="badge bg-green-100 text-green-700 mr-2">فعالة</span>}</div>
+              {!y.is_active && <button className="btn-ghost text-sm" onClick={()=>setActiveYearFn(y.id)}>تعيين كفعالة</button>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'subjects' && (
+        <div className="card p-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold">المواد الدراسية</h3>
+            <button className="btn-primary flex items-center gap-1" onClick={()=>openAdd('subject')}>{Icons.plus} إضافة مادة</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {subjects.map(s => (
+              <div key={s.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <span>{s.name_ar}</span><span className="text-sm text-gray-400">{s.name_en}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === 'grades' && (
+        <div className="card p-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold">المراحل الدراسية</h3>
+            <button className="btn-primary flex items-center gap-1" onClick={()=>openAdd('grade')}>{Icons.plus} إضافة مرحلة</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {grades.map(g => <div key={g.id} className="p-3 bg-gray-50 rounded-lg">{g.name}</div>)}
+          </div>
+        </div>
+      )}
+
+      {tab === 'categories' && (
+        <div className="card p-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold">أصناف المصروفات</h3>
+            <button className="btn-primary flex items-center gap-1" onClick={()=>openAdd('category')}>{Icons.plus} إضافة صنف</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {categories.map(c => <div key={c.id} className="p-3 bg-gray-50 rounded-lg">{c.name}</div>)}
+          </div>
+        </div>
+      )}
+
+      {tab === 'institute' && settings && (
+        <div className="card p-6">
+          <h3 className="font-bold mb-4">معلومات المعهد</h3>
+          <div className="space-y-4 max-w-lg">
+            <div><label className="block text-sm font-medium mb-1">الاسم بالعربية</label><input className="input-field" value={settings.name_ar||''} onChange={e=>setSettings({...settings,name_ar:e.target.value})}/></div>
+            <div><label className="block text-sm font-medium mb-1">الاسم بالإنجليزية</label><input className="input-field" value={settings.name_en||''} onChange={e=>setSettings({...settings,name_en:e.target.value})}/></div>
+            <div><label className="block text-sm font-medium mb-1">العنوان</label><input className="input-field" value={settings.address||''} onChange={e=>setSettings({...settings,address:e.target.value})}/></div>
+            <div><label className="block text-sm font-medium mb-1">رقم الهاتف</label><input className="input-field" value={settings.phone||''} onChange={e=>setSettings({...settings,phone:e.target.value})}/></div>
+            <button className="btn-primary" onClick={saveSettings}>حفظ التغييرات</button>
+          </div>
+        </div>
+      )}
+
+      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title={modalType==='year'?'إضافة سنة دراسية':modalType==='subject'?'إضافة مادة':modalType==='grade'?'إضافة مرحلة':'إضافة صنف'}>
+        <div className="space-y-4">
+          {modalType==='year' && <>
+            <div><label className="block text-sm font-medium mb-1">اسم السنة (مثل: 2025-2026)</label><input className="input-field" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-sm font-medium mb-1">تاريخ البداية</label><input className="input-field" type="date" value={form.start_date||''} onChange={e=>setForm({...form,start_date:e.target.value})}/></div>
+              <div><label className="block text-sm font-medium mb-1">تاريخ النهاية</label><input className="input-field" type="date" value={form.end_date||''} onChange={e=>setForm({...form,end_date:e.target.value})}/></div>
+            </div>
+          </>}
+          {modalType==='subject' && <>
+            <div><label className="block text-sm font-medium mb-1">اسم المادة بالعربية *</label><input className="input-field" value={form.name_ar||''} onChange={e=>setForm({...form,name_ar:e.target.value})}/></div>
+            <div><label className="block text-sm font-medium mb-1">اسم المادة بالإنجليزية</label><input className="input-field" value={form.name_en||''} onChange={e=>setForm({...form,name_en:e.target.value})}/></div>
+          </>}
+          {modalType==='grade' && <div><label className="block text-sm font-medium mb-1">اسم المرحلة *</label><input className="input-field" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></div>}
+          {modalType==='category' && <div><label className="block text-sm font-medium mb-1">اسم الصنف *</label><input className="input-field" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></div>}
+          <div className="flex gap-3"><button className="btn-primary" onClick={handleSave}>إضافة</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ============================================
+// USER MANAGEMENT PAGE
+// ============================================
+function UserMgmtPage() {
+  const showToast = useContext(ToastContext);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [showPermsModal, setShowPermsModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userPerms, setUserPerms] = useState({});
+  const [form, setForm] = useState({ username:'', password:'', full_name:'', role:'employee' });
+
+  useEffect(() => { loadUsers(); }, []);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('profiles').select('*').eq('is_active', true).order('created_at', {ascending:false});
+    setUsers(data || []);
+    setLoading(false);
+  };
+
+  const handleSave = async () => {
+    if(!form.username || !form.password || !form.full_name) { showToast('يرجى ملء جميع الحقول', 'error'); return; }
+    const { data: hash } = await supabase.rpc('hash_password', { p_password: form.password });
+    const hashVal = Array.isArray(hash) ? hash[0] : hash;
+    const { error } = await supabase.from('profiles').insert({
+      username: form.username, password_hash: hashVal, full_name: form.full_name, role: form.role
+    });
+    if(error) { showToast('خطأ: ربما اسم المستخدم موجود مسبقاً', 'error'); return; }
+    showToast('تم إنشاء المستخدم بنجاح');
+    setShowModal(false); loadUsers();
+  };
+
+  const openPerms = async (u) => {
+    setSelectedUser(u);
+    const { data } = await supabase.rpc('get_user_permissions', { p_user_id: u.id });
+    const map = {};
+    if(data) data.forEach(p => map[p.permission_key] = p.granted);
+    setUserPerms(map);
+    setShowPermsModal(true);
+  };
+
+  const togglePerm = (key) => {
+    setUserPerms(p => ({...p, [key]: !p[key]}));
+  };
+
+  const savePerms = async () => {
+    // Delete existing permissions
+    await supabase.from('permissions').delete().eq('user_id', selectedUser.id);
+    // Insert new ones
+    const perms = Object.entries(userPerms).filter(([k,v])=>v).map(([k,v])=>({
+      user_id: selectedUser.id, permission_key: k, granted: true
+    }));
+    if(perms.length) await supabase.from('permissions').insert(perms);
+    showToast('تم حفظ الصلاحيات');
+    setShowPermsModal(false);
+  };
+
+  if(loading) return <Loading/>;
+
+  return (
+    <div className="fade-in">
+      <PageHeader title="إدارة المستخدمين" action={()=>{setForm({username:'',password:'',full_name:'',role:'employee'});setShowModal(true)}} actionLabel="إضافة مستخدم"/>
+      <div className="card table-container">
+        <table>
+          <thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم الكامل</th><th>الدور</th><th>الصلاحيات</th></tr></thead>
+          <tbody>
+            {users.map((u,i) => (
+              <tr key={u.id}>
+                <td>{i+1}</td>
+                <td className="font-mono">{u.username}</td>
+                <td>{u.full_name}</td>
+                <td><span className={`badge ${u.role==='admin'?'bg-primary-100 text-primary-700':'bg-gray-100 text-gray-700'}`}>{u.role==='admin'?'مدير النظام':'موظف'}</span></td>
+                <td>{u.role==='employee' && <button className="btn-ghost text-sm" onClick={()=>openPerms(u)}>إدارة الصلاحيات</button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title="إضافة مستخدم جديد">
+        <div className="space-y-4">
+          <div><label className="block text-sm font-medium mb-1">اسم المستخدم *</label><input className="input-field" value={form.username} onChange={e=>setForm({...form,username:e.target.value})}/></div>
+          <div><label className="block text-sm font-medium mb-1">كلمة المرور *</label><input className="input-field" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></div>
+          <div><label className="block text-sm font-medium mb-1">الاسم الكامل *</label><input className="input-field" value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></div>
+          <div><label className="block text-sm font-medium mb-1">الدور</label>
+            <select className="input-field" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>
+              <option value="employee">موظف</option><option value="admin">مدير النظام</option>
+            </select>
+          </div>
+          <div className="flex gap-3"><button className="btn-primary" onClick={handleSave}>إنشاء</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+        </div>
+      </Modal>
+      <Modal isOpen={showPermsModal} onClose={()=>setShowPermsModal(false)} title={`صلاحيات: ${selectedUser?.full_name}`} wide>
+        <div className="space-y-4">
+          {ALL_PERMISSIONS.map(group => (
+            <div key={group.group} className="border rounded-lg p-3">
+              <h4 className="font-bold text-gray-700 mb-2">{group.group}</h4>
+              <div className="flex flex-wrap gap-3">
+                {group.keys.map(key => (
+                  <label key={key} className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={!!userPerms[key]} onChange={()=>togglePerm(key)} className="w-4 h-4 rounded"/>
+                    <span className="text-sm">{PERM_LABELS[key]}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="flex gap-3"><button className="btn-primary" onClick={savePerms}>حفظ الصلاحيات</button><button className="btn-ghost" onClick={()=>setShowPermsModal(false)}>إلغاء</button></div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ============================================
+// RECEIPT PRINT COMPONENT
+// ============================================
+function ReceiptPrint({ type, data, onClose }) {
+  const printRef = useRef();
+
+  const handlePrint = () => {
+    const content = printRef.current.innerHTML;
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>وصل</title>
+      <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+      <style>
+        * { font-family: 'Cairo', sans-serif; margin:0; padding:0; box-sizing:border-box; }
+        body { padding: 15mm; width: 148mm; }
+        .receipt { border: 2px solid #1B3A5C; border-radius: 8px; padding: 15px; }
+        .header { text-align: center; border-bottom: 2px solid #1B3A5C; padding-bottom: 10px; margin-bottom: 10px; }
+        .header h2 { color: #1B3A5C; font-size: 18px; }
+        .header p { font-size: 11px; color: #666; }
+        .receipt-type { background: #1B3A5C; color: white; padding: 5px 15px; border-radius: 20px; display: inline-block; font-size: 14px; font-weight: bold; margin: 8px 0; }
+        .info-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px dotted #ddd; }
+        .amount-box { background: #f0f7f0; border: 2px solid #2D8B4E; border-radius: 8px; padding: 10px; text-align: center; margin: 10px 0; }
+        .amount-box .number { font-size: 24px; font-weight: bold; color: #2D8B4E; }
+        .warning { background: #fff3cd; padding: 5px; text-align: center; font-size: 12px; color: #856404; border-radius: 4px; margin: 8px 0; font-weight: bold; }
+        .signatures { display: flex; justify-content: space-between; margin-top: 20px; padding-top: 10px; border-top: 1px solid #ddd; }
+        .sig-box { text-align: center; width: 30%; }
+        .sig-line { border-bottom: 1px solid #333; margin-top: 30px; margin-bottom: 5px; }
+        .sig-label { font-size: 11px; color: #666; }
+        table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+        th { background: #f5f5f5; padding: 5px; border: 1px solid #ddd; font-size: 11px; }
+        td { padding: 5px; border: 1px solid #ddd; }
+      </style>
+    </head><body>${content}</body></html>`);
+    win.document.close();
+    setTimeout(() => { win.print(); }, 500);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content max-w-2xl" onClick={e=>e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4 no-print">
+          <h3 className="font-bold">معاينة الوصل</h3>
+          <div className="flex gap-2">
+            <button className="btn-primary flex items-center gap-1" onClick={handlePrint}>{Icons.print} طباعة</button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">{Icons.close}</button>
+          </div>
+        </div>
+        <div ref={printRef}>
+          <div className="receipt" style={{border:'2px solid #1B3A5C', borderRadius:8, padding:15}}>
+            <div className="header" style={{textAlign:'center', borderBottom:'2px solid #1B3A5C', paddingBottom:10, marginBottom:10}}>
+              <h2 style={{color:'#1B3A5C', fontSize:18, fontWeight:'bold'}}>معهد كايزن - Kaizen Institute</h2>
+              <p style={{fontSize:11, color:'#666'}}>بغداد - الدورة - جمعية خير الله | هاتف: 07755757941</p>
+              {type === 'reservation' && <div style={{background:'#1B3A5C', color:'white', padding:'5px 15px', borderRadius:20, display:'inline-block', fontSize:14, fontWeight:'bold', margin:'8px 0'}}>وصل حجز مقعد</div>}
+              {type === 'payment' && <div style={{background:'#2D8B4E', color:'white', padding:'5px 15px', borderRadius:20, display:'inline-block', fontSize:14, fontWeight:'bold', margin:'8px 0'}}>وصل تسديد قسط</div>}
+            </div>
+            <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
+              <span>رقم الوصل: <b>{data.receipt_number || data.voucher_number}</b></span>
+              <span>التاريخ: <b>{formatDate(data.receipt_date || data.payout_date || data.expense_date)}</b></span>
+            </div>
+            <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
+              <span>الطالب: <b>{data.students?.full_name || '-'}</b></span>
+              {data.students?.grade_levels?.name && <span>المرحلة: <b>{data.students?.grade_levels?.name}</b></span>}
+            </div>
+            {data.registrations?.subjects?.name_ar && <div style={{padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
+              <span>المادة: <b>{data.registrations?.subjects?.name_ar}</b></span>
+              {data.registrations?.teachers?.full_name && <span style={{marginRight:20}}>الأستاذ: <b>{data.registrations?.teachers?.full_name}</b></span>}
+            </div>}
+            <div style={{background:'#f0f7f0', border:'2px solid #2D8B4E', borderRadius:8, padding:10, textAlign:'center', margin:'10px 0'}}>
+              <div style={{fontSize:24, fontWeight:'bold', color:'#2D8B4E'}}>{formatMoney(data.amount || data.total_amount)} د.ع</div>
+              <div style={{fontSize:11, color:'#666'}}>فقط {formatMoney(data.amount || data.total_amount)} دينار عراقي لا غير</div>
+            </div>
+            {type === 'reservation' && <div style={{background:'#fff3cd', padding:5, textAlign:'center', fontSize:12, color:'#856404', borderRadius:4, fontWeight:'bold'}}>المبلغ غير قابل للاسترجاع</div>}
+            <div style={{display:'flex', justifyContent:'space-between', marginTop:25, paddingTop:10, borderTop:'1px solid #ddd'}}>
+              <div style={{textAlign:'center', width:'30%'}}><div style={{borderBottom:'1px solid #333', marginTop:30, marginBottom:5}}></div><div style={{fontSize:11, color:'#666'}}>توقيع المستلم</div></div>
+              <div style={{textAlign:'center', width:'30%'}}><div style={{borderBottom:'1px solid #333', marginTop:30, marginBottom:5}}></div><div style={{fontSize:11, color:'#666'}}>ختم المعهد</div></div>
+              <div style={{textAlign:'center', width:'30%'}}><div style={{borderBottom:'1px solid #333', marginTop:30, marginBottom:5}}></div><div style={{fontSize:11, color:'#666'}}>توقيع المسلم</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// MORE MENU (Mobile)
+// ============================================
+function MoreMenu({ setActivePage }) {
+  const { user } = useContext(AuthContext);
+  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const items = [
+    { id:'expenses', label:'المصروفات', icon:Icons.receipt, perm:'expenses.view' },
+    { id:'reports', label:'التقارير', icon:Icons.reports, perm:'reports.revenue' },
+    { id:'settings', label:'الإعدادات', icon:Icons.settings, perm:'settings.years' },
+  ];
+  if(user.role==='admin') items.push({ id:'usermgmt', label:'إدارة المستخدمين', icon:Icons.users });
+
+  return (
+    <div className="fade-in">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">المزيد</h2>
+      <div className="grid grid-cols-2 gap-3">
+        {items.filter(i=>!i.perm || hasPerm(i.perm)).map(item => (
+          <button key={item.id} onClick={()=>setActivePage(item.id)} className="card p-6 text-center hover:shadow-md transition">
+            <div className="text-primary-600 flex justify-center mb-2">{item.icon}</div>
+            <span className="font-medium text-gray-700">{item.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// MAIN APP
+// ============================================
+function App() {
+  const [user, setUser] = useState(null);
+  const [activePage, setActivePage] = useState('dashboard');
+  const [years, setYears] = useState([]);
+  const [activeYear, setActiveYear] = useState(null);
+  const [loadingApp, setLoadingApp] = useState(false);
+
+  useEffect(() => {
+    // Check stored session
+    const stored = localStorage.getItem('kaizen_user');
+    if(stored) {
+      try { setUser(JSON.parse(stored)); } catch(e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if(user) loadYears();
+  }, [user]);
+
+  const loadYears = async () => {
+    setLoadingApp(true);
+    const { data } = await supabase.from('academic_years').select('*').order('name', {ascending:false});
+    setYears(data || []);
+    const active = (data||[]).find(y => y.is_active);
+    setActiveYear(active || (data||[])[0] || null);
+    setLoadingApp(false);
+  };
+
+  const handleLogin = (u) => {
+    setUser(u);
+    localStorage.setItem('kaizen_user', JSON.stringify(u));
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('kaizen_user');
+    setActivePage('dashboard');
+  };
+
+  if(!user) return (
+    <ToastProvider>
+      <LoginPage onLogin={handleLogin}/>
+    </ToastProvider>
+  );
+
+  if(loadingApp) return <div className="min-h-screen flex items-center justify-center"><Loading/></div>;
+
+  const renderPage = () => {
+    switch(activePage) {
+      case 'dashboard': return <DashboardPage/>;
+      case 'students': return <StudentsPage/>;
+      case 'teachers': return <TeachersPage/>;
+      case 'reservations': return <ReservationsPage/>;
+      case 'payments': return <PaymentsPage/>;
+      case 'payouts': return <PayoutsPage/>;
+      case 'expenses': return <ExpensesPage/>;
+      case 'reports': return <ReportsPage/>;
+      case 'settings': return <SettingsPage/>;
+      case 'usermgmt': return <UserMgmtPage/>;
+      case 'more': return <MoreMenu setActivePage={setActivePage}/>;
+      default: return <DashboardPage/>;
+    }
+  };
+
+  return (
+    <ToastProvider>
+      <AuthContext.Provider value={{ user }}>
+        <YearContext.Provider value={{ activeYear, years, setYears, setActiveYear }}>
+          <Sidebar activePage={activePage} setActivePage={setActivePage} user={user} onLogout={handleLogout}/>
+          <div className="main-content mr-0 md:mr-64 p-4 md:p-6 min-h-screen">
+            {/* Year selector bar */}
+            <div className="flex justify-between items-center mb-4 no-print">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">السنة الدراسية:</span>
+                <select className="input-field w-auto text-sm py-1" value={activeYear?.id||''} onChange={e=>{
+                  const y = years.find(y=>y.id===e.target.value);
+                  if(y) setActiveYear(y);
+                }}>
+                  {years.map(y=><option key={y.id} value={y.id}>{y.name} {y.is_active?'(فعالة)':''}</option>)}
+                </select>
+              </div>
+              <div className="text-sm text-gray-500">{user.full_name} ({user.role==='admin'?'مدير':'موظف'})</div>
+            </div>
+            {renderPage()}
+          </div>
+        </YearContext.Provider>
+      </AuthContext.Provider>
+    </ToastProvider>
+  );
+}
+
+ReactDOM.render(<App/>, document.getElementById('root'));
+</script>
+</body>
+</html>
