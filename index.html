@@ -548,6 +548,7 @@ function DashboardPage() {
   }, [activeYear]);
 
   const [noSeatStudents, setNoSeatStudents] = useState([]);
+  const [seatDetail, setSeatDetail] = useState(null);
 
   const loadData = async () => {
     if(!activeYear?.id) return;
@@ -557,11 +558,33 @@ function DashboardPage() {
       setStats(s);
       const { data: c } = await supabase.rpc('get_monthly_chart_data', { p_year_id: activeYear.id });
       setChartData(c || []);
-      // Check students registered but without seat reservation
+      // Check students registered but without full seat reservation coverage
       const { data: allStudents } = await supabase.from('students').select('id,full_name').eq('academic_year_id', activeYear.id).eq('is_active', true);
-      const { data: seatStudentIds } = await supabase.from('seat_reservations').select('student_id').eq('academic_year_id', activeYear.id).eq('is_deleted', false);
-      const seatSet = new Set((seatStudentIds||[]).map(s => s.student_id));
-      setNoSeatStudents((allStudents||[]).filter(s => !seatSet.has(s.id)));
+      const { data: allRegs } = await supabase.from('registrations').select('id,student_id,subject_id,subjects(name_ar),teachers(full_name)').eq('academic_year_id', activeYear.id).eq('is_active', true);
+      const { data: allSeatRes } = await supabase.from('seat_reservations').select('id,student_id,seat_reservation_items(subject_name,amount)').eq('academic_year_id', activeYear.id).eq('is_deleted', false);
+      // Build per-student seat paid subject set
+      const seatPaidMap = {};
+      (allSeatRes||[]).forEach(sr => {
+        if(!seatPaidMap[sr.student_id]) seatPaidMap[sr.student_id] = new Set();
+        (sr.seat_reservation_items||[]).forEach(item => { if(item.subject_name) seatPaidMap[sr.student_id].add(item.subject_name); });
+      });
+      // Build result
+      const result = [];
+      (allStudents||[]).forEach(stu => {
+        const regs = (allRegs||[]).filter(r => r.student_id === stu.id);
+        if(regs.length === 0) return;
+        const paidSet = seatPaidMap[stu.id] || new Set();
+        const subjects = regs.map(r => ({
+          name: r.subjects?.name_ar || '-',
+          teacher: r.teachers?.full_name || '-',
+          paid: paidSet.has(r.subjects?.name_ar)
+        }));
+        const unpaid = subjects.filter(s => !s.paid);
+        if(unpaid.length > 0) {
+          result.push({ ...stu, subjects, unpaidCount: unpaid.length, totalCount: subjects.length });
+        }
+      });
+      setNoSeatStudents(result);
     } catch(e) { console.error('Dashboard error:', e); }
     setLoading(false);
   };
@@ -601,13 +624,50 @@ function DashboardPage() {
         <div className="card p-4 mb-6 border-r-4" style={{borderRightColor:'#e67e22', background:'#FFF8F0'}}>
           <div className="flex items-center gap-2 mb-3">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e67e22" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <h3 className="font-bold text-orange-700">تنبيه: طلاب بدون حجز مقعد ({noSeatStudents.length})</h3>
+            <h3 className="font-bold text-orange-700">تنبيه: طلاب لديهم مواد بدون حجز مقعد ({noSeatStudents.length})</h3>
           </div>
-          <p className="text-sm text-orange-600 mb-2">الطلاب التالية أسماؤهم مسجلون في مواد لكن لم يدفعوا حجز مقعد بعد:</p>
+          <p className="text-sm text-orange-600 mb-3">اضغط على اسم الطالب لعرض كشف تفصيلي بالمواد المدفوعة وغير المدفوعة:</p>
           <div className="flex flex-wrap gap-2">
             {noSeatStudents.map(s => (
-              <span key={s.id} className="px-3 py-1 rounded-full text-sm font-medium" style={{background:'#FDEBD0', color:'#9C5700'}}>{s.full_name}</span>
+              <button key={s.id} onClick={()=>setSeatDetail(s)} className="px-3 py-1.5 rounded-full text-sm font-medium cursor-pointer hover:shadow-md transition-all" style={{background:'#FDEBD0', color:'#9C5700', border:'1px solid #F0C36D'}}>
+                {s.full_name} <span className="text-xs" style={{color:'#c0392b'}}>({s.unpaidCount} من {s.totalCount})</span>
+              </button>
             ))}
+          </div>
+        </div>
+      )}
+      {/* Seat Detail Modal */}
+      {seatDetail && (
+        <div className="modal-overlay" onClick={()=>setSeatDetail(null)}>
+          <div className="modal-content max-w-lg" onClick={e=>e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-lg">كشف حجز المقعد - {seatDetail.full_name}</h3>
+              <button onClick={()=>setSeatDetail(null)} className="text-gray-400 hover:text-gray-600">{Icons.close}</button>
+            </div>
+            <div className="mb-3 p-3 rounded-lg" style={{background:'#FFF8F0', border:'1px solid #F0C36D'}}>
+              <div className="flex justify-between text-sm">
+                <span>إجمالي المواد المسجلة: <b>{seatDetail.totalCount}</b></span>
+                <span>مدفوع الحجز: <b className="text-green-600">{seatDetail.totalCount - seatDetail.unpaidCount}</b></span>
+                <span>غير مدفوع: <b className="text-red-600">{seatDetail.unpaidCount}</b></span>
+              </div>
+            </div>
+            <table className="w-full text-sm">
+              <thead><tr style={{background:'#f5f5f5'}}><th className="p-2 text-right">المادة</th><th className="p-2 text-right">الأستاذ</th><th className="p-2 text-center">حالة الحجز</th></tr></thead>
+              <tbody>
+                {seatDetail.subjects.map((sub, i) => (
+                  <tr key={i} style={{background: sub.paid ? '#f0fdf4' : '#fef2f2', borderBottom:'1px solid #eee'}}>
+                    <td className="p-2 font-medium">{sub.name}</td>
+                    <td className="p-2 text-gray-600">{sub.teacher}</td>
+                    <td className="p-2 text-center">
+                      {sub.paid
+                        ? <span className="px-3 py-1 rounded-full text-xs font-bold" style={{background:'#dcfce7', color:'#166534'}}>مدفوع ✓</span>
+                        : <span className="px-3 py-1 rounded-full text-xs font-bold" style={{background:'#fee2e2', color:'#991b1b'}}>غير مدفوع ✗</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
