@@ -528,6 +528,8 @@ function DashboardPage() {
     loadData();
   }, [activeYear]);
 
+  const [noSeatStudents, setNoSeatStudents] = useState([]);
+
   const loadData = async () => {
     if(!activeYear?.id) return;
     setLoading(true);
@@ -536,6 +538,11 @@ function DashboardPage() {
       setStats(s);
       const { data: c } = await supabase.rpc('get_monthly_chart_data', { p_year_id: activeYear.id });
       setChartData(c || []);
+      // Check students registered but without seat reservation
+      const { data: allStudents } = await supabase.from('students').select('id,full_name').eq('academic_year_id', activeYear.id).eq('is_active', true);
+      const { data: seatStudentIds } = await supabase.from('seat_reservations').select('student_id').eq('academic_year_id', activeYear.id).eq('is_deleted', false);
+      const seatSet = new Set((seatStudentIds||[]).map(s => s.student_id));
+      setNoSeatStudents((allStudents||[]).filter(s => !seatSet.has(s.id)));
     } catch(e) { console.error('Dashboard error:', e); }
     setLoading(false);
   };
@@ -571,6 +578,20 @@ function DashboardPage() {
           </div>
         ))}
       </div>
+      {noSeatStudents.length > 0 && (
+        <div className="card p-4 mb-6 border-r-4" style={{borderRightColor:'#e67e22', background:'#FFF8F0'}}>
+          <div className="flex items-center gap-2 mb-3">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e67e22" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <h3 className="font-bold text-orange-700">تنبيه: طلاب بدون حجز مقعد ({noSeatStudents.length})</h3>
+          </div>
+          <p className="text-sm text-orange-600 mb-2">الطلاب التالية أسماؤهم مسجلون في مواد لكن لم يدفعوا حجز مقعد بعد:</p>
+          <div className="flex flex-wrap gap-2">
+            {noSeatStudents.map(s => (
+              <span key={s.id} className="px-3 py-1 rounded-full text-sm font-medium" style={{background:'#FDEBD0', color:'#9C5700'}}>{s.full_name}</span>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Charts - CSS Based */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card p-5">
@@ -1257,6 +1278,19 @@ function PaymentsPage() {
     const total = parseInt(form.total_amount);
     let allocs = [];
 
+    // Validate manual distribution doesn't exceed total
+    if(form.allocation_type === 'manual') {
+      const manualSum = form.allocations.reduce((s, a) => s + (parseInt(a.amount)||0), 0);
+      if(manualSum > total) {
+        showToast('مجموع التوزيع اليدوي (' + formatMoney(manualSum) + ') أكبر من المبلغ الكلي (' + formatMoney(total) + ')', 'error');
+        return;
+      }
+      if(manualSum < total) {
+        showToast('مجموع التوزيع اليدوي (' + formatMoney(manualSum) + ') أقل من المبلغ الكلي (' + formatMoney(total) + '). يرجى توزيع كامل المبلغ.', 'error');
+        return;
+      }
+    }
+
     if(form.allocation_type === 'equal') {
       const perSubject = Math.floor(total / studentRegs.length);
       let remainder = total - (perSubject * studentRegs.length);
@@ -1366,16 +1400,29 @@ function PaymentsPage() {
               <option value="manual">توزيع يدوي</option>
             </select>
           </div>
-          {form.allocation_type === 'manual' && studentRegs.map((r, i) => (
-            <div key={r.id} className="flex items-center gap-3">
-              <span className="text-sm flex-1">{r.subjects?.name_ar} - {r.teachers?.full_name}</span>
-              <input className="input-field w-40" type="number" placeholder="المبلغ" value={form.allocations[i]?.amount||''} onChange={e=>{
-                const allocs = [...form.allocations];
-                allocs[i] = {...allocs[i], amount: e.target.value};
-                setForm({...form, allocations: allocs});
-              }}/>
-            </div>
-          ))}
+          {form.allocation_type === 'manual' && <>
+            {studentRegs.map((r, i) => (
+              <div key={r.id} className="flex items-center gap-3">
+                <span className="text-sm flex-1">{r.subjects?.name_ar} - {r.teachers?.full_name}</span>
+                <input className="input-field w-40" type="number" placeholder="المبلغ" value={form.allocations[i]?.amount||''} onChange={e=>{
+                  const allocs = [...form.allocations];
+                  allocs[i] = {...allocs[i], amount: e.target.value};
+                  setForm({...form, allocations: allocs});
+                }}/>
+              </div>
+            ))}
+            {(() => {
+              const manualSum = form.allocations.reduce((s,a) => s+(parseInt(a.amount)||0), 0);
+              const total = parseInt(form.total_amount)||0;
+              const diff = manualSum - total;
+              return <div className={`p-2 rounded-lg text-sm text-center font-bold ${diff === 0 && total > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                مجموع التوزيع: {formatMoney(manualSum)} د.ع / المبلغ الكلي: {formatMoney(total)} د.ع
+                {diff > 0 && <span> (زيادة {formatMoney(diff)})</span>}
+                {diff < 0 && <span> (متبقي {formatMoney(Math.abs(diff))})</span>}
+                {diff === 0 && total > 0 && <span> ✓</span>}
+              </div>;
+            })()}
+          </>}
           <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>{editing ? 'تحديث الوصل' : 'إنشاء الوصل'}</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
         </div>
       </Modal>
@@ -1701,7 +1748,7 @@ function ReportsPage() {
       .eq('student_id', selectedStudent).eq('academic_year_id', activeYear?.id);
     const { data: payments } = await supabase.from('payment_allocations').select('*,payments!inner(receipt_number,receipt_date,total_amount,is_deleted)')
       .in('registration_id', (regs||[]).map(r=>r.id)).eq('payments.is_deleted', false);
-    const { data: reservs } = await supabase.from('seat_reservations').select('*').eq('student_id', selectedStudent).eq('is_deleted', false);
+    const { data: reservs } = await supabase.from('seat_reservations').select('*,seat_reservation_items(*)').eq('student_id', selectedStudent).eq('is_deleted', false);
     const { data: student } = await supabase.from('students').select('*,grade_levels(name)').eq('id', selectedStudent).single();
     setStudentStmt({ student, registrations: regs||[], payments: payments||[], reservations: reservs||[] });
     setLoading(false);
@@ -1861,9 +1908,16 @@ function ReportsPage() {
               {studentStmt.reservations.length > 0 && <>
                 <h5 className="font-bold text-gray-700 mt-4 mb-2">حجوزات المقاعد</h5>
                 <table>
-                  <thead><tr><th>رقم الوصل</th><th>المبلغ</th><th>التاريخ</th></tr></thead>
-                  <tbody>{studentStmt.reservations.map(r=><tr key={r.id}><td>{r.receipt_number}</td><td>{formatMoney(r.amount)} د.ع</td><td>{formatDate(r.receipt_date)}</td></tr>)}</tbody>
+                  <thead><tr><th>رقم الوصل</th><th>المواد</th><th>المبلغ</th><th>ملاحظات</th><th>التاريخ</th></tr></thead>
+                  <tbody>{studentStmt.reservations.map(r=><tr key={r.id}>
+                    <td>{r.receipt_number}</td>
+                    <td className="text-sm">{(r.seat_reservation_items||[]).length > 0 ? (r.seat_reservation_items||[]).map(i=>i.subject_name||'-').join('، ') : '-'}</td>
+                    <td className="font-bold">{formatMoney(r.amount)} د.ع</td>
+                    <td className="text-xs text-gray-500">{r.notes||'-'}</td>
+                    <td>{formatDate(r.receipt_date)}</td>
+                  </tr>)}</tbody>
                 </table>
+                <div className="mt-2 text-left"><b>إجمالي الحجوزات: <span className="text-primary-700">{formatMoney(studentStmt.reservations.reduce((s,r)=>s+r.amount,0))} د.ع</span></b></div>
               </>}
             </div>
           )}
