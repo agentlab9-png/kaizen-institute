@@ -943,7 +943,7 @@ function ReservationsPage() {
   const loadData = async () => {
     setLoading(true);
     const [rRes, sRes] = await Promise.all([
-      supabase.from('seat_reservations').select('*,students(full_name,grade_levels(name)),registrations(subjects(name_ar),teachers(full_name))').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
+      supabase.from('seat_reservations').select('*,students(full_name,grade_levels(name)),registrations(subjects(name_ar),teachers(full_name)),creator:profiles!created_by(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
       supabase.from('students').select('*').eq('academic_year_id', activeYear?.id).eq('is_active', true)
     ]);
     setReservations(rRes.data || []);
@@ -999,7 +999,7 @@ function ReservationsPage() {
       <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch} placeholder="بحث بالاسم أو رقم الوصل..."/></div>
       <div className="card table-container">
         <table>
-          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المادة</th><th>الأستاذ</th><th>المبلغ</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المادة</th><th>الأستاذ</th><th>المبلغ</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
           <tbody>
             {filtered.map(r => (
               <tr key={r.id}>
@@ -1009,10 +1009,11 @@ function ReservationsPage() {
                 <td>{r.registrations?.teachers?.full_name || '-'}</td>
                 <td className="font-bold text-accent-600">{formatMoney(r.amount)} د.ع</td>
                 <td>{formatDate(r.receipt_date)}</td>
+                <td className="text-xs text-gray-500">{r.creator?.full_name || '-'}</td>
                 <td><div className="flex gap-2">{hasPerm('reservations.edit') && <button onClick={()=>openEdit(r)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('reservations.delete') && <button onClick={()=>setConfirmDel(r.id)} className="text-red-500">{Icons.trash}</button>}<button onClick={()=>setPrintData(r)} className="text-primary-600">{Icons.print}</button></div></td>
               </tr>
             ))}
-            {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا توجد حجوزات</td></tr>}
+            {filtered.length===0 && <tr><td colSpan="8" className="text-center py-8 text-gray-400">لا توجد حجوزات</td></tr>}
           </tbody>
         </table>
       </div>
@@ -1062,7 +1063,7 @@ function PaymentsPage() {
   const loadData = async () => {
     setLoading(true);
     const [pRes, sRes] = await Promise.all([
-      supabase.from('payments').select('*,students(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
+      supabase.from('payments').select('*,students(full_name),creator:profiles!created_by(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
       supabase.from('students').select('*').eq('academic_year_id', activeYear?.id).eq('is_active', true)
     ]);
     setPayments(pRes.data || []);
@@ -1170,7 +1171,7 @@ function PaymentsPage() {
       <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch}/></div>
       <div className="card table-container">
         <table>
-          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المبلغ</th><th>نوع التوزيع</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المبلغ</th><th>نوع التوزيع</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
           <tbody>
             {filtered.map(p => (
               <tr key={p.id}>
@@ -1179,10 +1180,11 @@ function PaymentsPage() {
                 <td className="font-bold text-accent-600">{formatMoney(p.total_amount)} د.ع</td>
                 <td>{p.allocation_type==='equal'?'توزيع متساوي':'توزيع يدوي'}</td>
                 <td>{formatDate(p.receipt_date)}</td>
+                <td className="text-xs text-gray-500">{p.creator?.full_name || '-'}</td>
                 <td><div className="flex gap-2">{hasPerm('payments.add') && <button onClick={()=>openEdit(p)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('payments.delete') && <button onClick={()=>setConfirmDel(p.id)} className="text-red-500">{Icons.trash}</button>}<button onClick={()=>setPrintData(p)} className="text-primary-600">{Icons.print}</button></div></td>
               </tr>
             ))}
-            {filtered.length===0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400">لا توجد دفعات</td></tr>}
+            {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا توجد دفعات</td></tr>}
           </tbody>
         </table>
       </div>
@@ -1257,7 +1259,7 @@ function PayoutsPage() {
   const loadData = async () => {
     setLoading(true);
     const [pRes, tRes] = await Promise.all([
-      supabase.from('teacher_payouts').select('*,teachers(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
+      supabase.from('teacher_payouts').select('*,teachers(full_name),creator:profiles!created_by(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
       supabase.from('teachers').select('*').eq('is_active', true)
     ]);
     setPayouts(pRes.data || []);
@@ -1331,7 +1333,7 @@ function PayoutsPage() {
       <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch}/></div>
       <div className="card table-container">
         <table>
-          <thead><tr><th>رقم الوصل</th><th>الأستاذ</th><th>المبلغ</th><th>الرصيد قبل</th><th>الرصيد بعد</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>رقم الوصل</th><th>الأستاذ</th><th>المبلغ</th><th>الرصيد قبل</th><th>الرصيد بعد</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
           <tbody>
             {filtered.map(p => (
               <tr key={p.id}>
@@ -1341,10 +1343,11 @@ function PayoutsPage() {
                 <td>{formatMoney(p.balance_before)} د.ع</td>
                 <td>{formatMoney(p.balance_after)} د.ع</td>
                 <td>{formatDate(p.payout_date)}</td>
+                <td className="text-xs text-gray-500">{p.creator?.full_name || '-'}</td>
                 <td><div className="flex gap-2">{hasPerm('payouts.add') && <button onClick={()=>openEdit(p)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('payouts.delete') && <button onClick={()=>setConfirmDel(p.id)} className="text-red-500">{Icons.trash}</button>}</div></td>
               </tr>
             ))}
-            {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا توجد صرفيات</td></tr>}
+            {filtered.length===0 && <tr><td colSpan="8" className="text-center py-8 text-gray-400">لا توجد صرفيات</td></tr>}
           </tbody>
         </table>
       </div>
@@ -1393,7 +1396,7 @@ function ExpensesPage() {
   const loadData = async () => {
     setLoading(true);
     const [eRes, cRes] = await Promise.all([
-      supabase.from('expenses').select('*,expense_categories(name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
+      supabase.from('expenses').select('*,expense_categories(name),creator:profiles!created_by(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
       supabase.from('expense_categories').select('*').eq('is_active', true).order('sort_order', {ascending:true})
     ]);
     setExpenses(eRes.data || []);
@@ -1466,7 +1469,7 @@ function ExpensesPage() {
       </div>
       <div className="card table-container">
         <table>
-          <thead><tr><th>رقم الوصل</th><th>الصنف</th><th>المبلغ</th><th>المستلم</th><th>الوصف</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>رقم الوصل</th><th>الصنف</th><th>المبلغ</th><th>المستلم</th><th>الوصف</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
           <tbody>
             {filtered.map(e => (
               <tr key={e.id}>
@@ -1476,10 +1479,11 @@ function ExpensesPage() {
                 <td>{e.recipient || '-'}</td>
                 <td className="text-sm text-gray-500">{e.description || '-'}</td>
                 <td>{formatDate(e.expense_date)}</td>
+                <td className="text-xs text-gray-500">{e.creator?.full_name || '-'}</td>
                 <td><div className="flex gap-2">{hasPerm('expenses.edit') && <button onClick={()=>openEdit(e)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('expenses.delete') && <button onClick={()=>setConfirmDel(e.id)} className="text-red-500">{Icons.trash}</button>}</div></td>
               </tr>
             ))}
-            {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا توجد مصروفات</td></tr>}
+            {filtered.length===0 && <tr><td colSpan="8" className="text-center py-8 text-gray-400">لا توجد مصروفات</td></tr>}
           </tbody>
         </table>
       </div>
@@ -1546,8 +1550,8 @@ function ReportsPage() {
     setLoading(true);
     const { data: regs } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name)')
       .eq('student_id', selectedStudent).eq('academic_year_id', activeYear?.id);
-    const { data: payments } = await supabase.from('payment_allocations').select('*,payments(receipt_number,receipt_date,total_amount)')
-      .in('registration_id', (regs||[]).map(r=>r.id));
+    const { data: payments } = await supabase.from('payment_allocations').select('*,payments!inner(receipt_number,receipt_date,total_amount,is_deleted)')
+      .in('registration_id', (regs||[]).map(r=>r.id)).eq('payments.is_deleted', false);
     const { data: reservs } = await supabase.from('seat_reservations').select('*').eq('student_id', selectedStudent).eq('is_deleted', false);
     const { data: student } = await supabase.from('students').select('*,grade_levels(name)').eq('id', selectedStudent).single();
     setStudentStmt({ student, registrations: regs||[], payments: payments||[], reservations: reservs||[] });
@@ -1572,7 +1576,7 @@ function ReportsPage() {
     const [seatRes, payRes] = await Promise.all([
       supabase.from('seat_reservations').select('*,students(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false)
         .order('receipt_date', {ascending:false}),
-      supabase.from('payment_allocations').select('*,payments(receipt_number,receipt_date,students(full_name)),registrations(subjects(name_ar))')
+      supabase.from('payment_allocations').select('*,payments!inner(receipt_number,receipt_date,is_deleted,students(full_name)),registrations(subjects(name_ar))').eq('payments.is_deleted', false)
     ]);
     setData({ seats: seatRes.data||[], payments: payRes.data||[] });
     setLoading(false);
@@ -2040,6 +2044,8 @@ function UserMgmtPage() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [userPerms, setUserPerms] = useState({});
   const [form, setForm] = useState({ username:'', password:'', full_name:'', role:'employee' });
+  const [editing, setEditing] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
 
   useEffect(() => { loadUsers(); }, []);
 
@@ -2050,16 +2056,46 @@ function UserMgmtPage() {
     setLoading(false);
   };
 
+  const openAdd = () => {
+    setEditing(null);
+    setForm({ username:'', password:'', full_name:'', role:'employee' });
+    setShowModal(true);
+  };
+
+  const openEdit = (u) => {
+    setEditing(u);
+    setForm({ username: u.username, password: '', full_name: u.full_name, role: u.role });
+    setShowModal(true);
+  };
+
+  const handleDelete = async () => {
+    await supabase.from('profiles').update({ is_active: false }).eq('id', confirmDel);
+    showToast('تم تعطيل المستخدم'); setConfirmDel(null); loadUsers();
+  };
+
   const handleSave = async () => {
-    if(!form.username || !form.password || !form.full_name) { showToast('يرجى ملء جميع الحقول', 'error'); return; }
-    const { data: hash } = await supabase.rpc('hash_password', { p_password: form.password });
-    const hashVal = Array.isArray(hash) ? hash[0] : hash;
-    const { error } = await supabase.from('profiles').insert({
-      username: form.username, password_hash: hashVal, full_name: form.full_name, role: form.role
-    });
-    if(error) { showToast('خطأ: ربما اسم المستخدم موجود مسبقاً', 'error'); return; }
-    showToast('تم إنشاء المستخدم بنجاح');
-    setShowModal(false); loadUsers();
+    if(!form.username || !form.full_name) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
+    if(!editing && !form.password) { showToast('يرجى إدخال كلمة المرور', 'error'); return; }
+
+    if(editing) {
+      const updates = { username: form.username, full_name: form.full_name, role: form.role };
+      if(form.password) {
+        const { data: hash } = await supabase.rpc('hash_password', { p_password: form.password });
+        updates.password_hash = Array.isArray(hash) ? hash[0] : hash;
+      }
+      const { error } = await supabase.from('profiles').update(updates).eq('id', editing.id);
+      if(error) { showToast('خطأ في التحديث: ' + (error.message||''), 'error'); return; }
+      showToast('تم تحديث بيانات المستخدم');
+    } else {
+      const { data: hash } = await supabase.rpc('hash_password', { p_password: form.password });
+      const hashVal = Array.isArray(hash) ? hash[0] : hash;
+      const { error } = await supabase.from('profiles').insert({
+        username: form.username, password_hash: hashVal, full_name: form.full_name, role: form.role
+      });
+      if(error) { showToast('خطأ: ربما اسم المستخدم موجود مسبقاً', 'error'); return; }
+      showToast('تم إنشاء المستخدم بنجاح');
+    }
+    setShowModal(false); setEditing(null); loadUsers();
   };
 
   const openPerms = async (u) => {
@@ -2091,10 +2127,10 @@ function UserMgmtPage() {
 
   return (
     <div className="fade-in">
-      <PageHeader title="إدارة المستخدمين" action={()=>{setForm({username:'',password:'',full_name:'',role:'employee'});setShowModal(true)}} actionLabel="إضافة مستخدم"/>
+      <PageHeader title="إدارة المستخدمين" action={openAdd} actionLabel="إضافة مستخدم"/>
       <div className="card table-container">
         <table>
-          <thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم الكامل</th><th>الدور</th><th>الصلاحيات</th></tr></thead>
+          <thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم الكامل</th><th>الدور</th><th>إجراءات</th></tr></thead>
           <tbody>
             {users.map((u,i) => (
               <tr key={u.id}>
@@ -2102,25 +2138,31 @@ function UserMgmtPage() {
                 <td className="font-mono">{u.username}</td>
                 <td>{u.full_name}</td>
                 <td><span className={`badge ${u.role==='admin'?'bg-primary-100 text-primary-700':'bg-gray-100 text-gray-700'}`}>{u.role==='admin'?'مدير النظام':'موظف'}</span></td>
-                <td>{u.role==='employee' && <button className="btn-ghost text-sm" onClick={()=>openPerms(u)}>إدارة الصلاحيات</button>}</td>
+                <td><div className="flex gap-2">
+                  <button onClick={()=>openEdit(u)} className="text-blue-600" title="تعديل البيانات">{Icons.edit}</button>
+                  {u.role==='employee' && <button className="btn-ghost text-xs py-1 px-2" onClick={()=>openPerms(u)}>الصلاحيات</button>}
+                  {u.role!=='admin' && <button onClick={()=>setConfirmDel(u.id)} className="text-red-500" title="تعطيل">{Icons.trash}</button>}
+                </div></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title="إضافة مستخدم جديد">
+      <Modal isOpen={showModal} onClose={()=>{setShowModal(false);setEditing(null)}} title={editing ? 'تعديل بيانات المستخدم' : 'إضافة مستخدم جديد'}>
         <div className="space-y-4">
+          {editing && <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-center text-sm text-yellow-700">تعديل المستخدم: <b>{editing.username}</b></div>}
           <div><label className="block text-sm font-medium mb-1">اسم المستخدم *</label><input className="input-field" value={form.username} onChange={e=>setForm({...form,username:e.target.value})}/></div>
-          <div><label className="block text-sm font-medium mb-1">كلمة المرور *</label><input className="input-field" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></div>
+          <div><label className="block text-sm font-medium mb-1">{editing ? 'كلمة المرور الجديدة (اتركها فارغة لعدم التغيير)' : 'كلمة المرور *'}</label><input className="input-field" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} placeholder={editing ? 'اتركها فارغة إذا لا تريد تغييرها' : ''}/></div>
           <div><label className="block text-sm font-medium mb-1">الاسم الكامل *</label><input className="input-field" value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/></div>
           <div><label className="block text-sm font-medium mb-1">الدور</label>
             <select className="input-field" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>
               <option value="employee">موظف</option><option value="admin">مدير النظام</option>
             </select>
           </div>
-          <div className="flex gap-3"><button className="btn-primary" onClick={handleSave}>إنشاء</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+          <div className="flex gap-3"><button className="btn-primary" onClick={handleSave}>{editing ? 'تحديث' : 'إنشاء'}</button><button className="btn-ghost" onClick={()=>{setShowModal(false);setEditing(null)}}>إلغاء</button></div>
         </div>
       </Modal>
+      <ConfirmDialog isOpen={!!confirmDel} onConfirm={handleDelete} onCancel={()=>setConfirmDel(null)} message="هل أنت متأكد من تعطيل هذا المستخدم؟"/>
       <Modal isOpen={showPermsModal} onClose={()=>setShowPermsModal(false)} title={`صلاحيات: ${selectedUser?.full_name}`} wide>
         <div className="space-y-4">
           {ALL_PERMISSIONS.map(group => (
