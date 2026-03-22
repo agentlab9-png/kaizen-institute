@@ -631,6 +631,8 @@ function StudentsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [delWarning, setDelWarning] = useState(null);
+  const [delStep, setDelStep] = useState(0);
   const [form, setForm] = useState({ full_name:'', grade_level_id:'', student_phone:'', parent_phone:'' });
   // Registration modal
   const [showRegModal, setShowRegModal] = useState(false);
@@ -672,9 +674,38 @@ function StudentsPage() {
     loadData();
   };
 
+  const tryDelete = async (studentId) => {
+    // Check if student has any transactions
+    const [regsRes, reservRes, paysRes] = await Promise.all([
+      supabase.from('registrations').select('id,remaining_balance,total_paid,subjects(name_ar)').eq('student_id', studentId).eq('is_active', true),
+      supabase.from('seat_reservations').select('id,amount').eq('student_id', studentId).eq('is_deleted', false),
+      supabase.from('payments').select('id,total_amount').eq('student_id', studentId).eq('is_deleted', false)
+    ]);
+    const regs = regsRes.data || [];
+    const reservs = reservRes.data || [];
+    const pays = paysRes.data || [];
+    const totalOutstanding = regs.reduce((s,r) => s + (r.remaining_balance||0), 0);
+    const totalPaid = regs.reduce((s,r) => s + (r.total_paid||0), 0);
+    const totalReservations = reservs.reduce((s,r) => s + r.amount, 0);
+    const totalPayments = pays.reduce((s,r) => s + r.total_amount, 0);
+    const hasData = regs.length > 0 || reservs.length > 0 || pays.length > 0;
+
+    if(hasData) {
+      setDelWarning({ studentId, regs, totalOutstanding, totalPaid, totalReservations, totalPayments, numRegs: regs.length, numReservs: reservs.length, numPays: pays.length });
+      setDelStep(1);
+    } else {
+      setConfirmDel(studentId);
+    }
+  };
+
   const handleDelete = async () => {
-    await supabase.from('students').update({ is_active: false }).eq('id', confirmDel);
-    setConfirmDel(null); showToast('تم حذف الطالب'); loadData();
+    const sid = confirmDel || delWarning?.studentId;
+    // Deactivate student
+    await supabase.from('students').update({ is_active: false }).eq('id', sid);
+    // Deactivate registrations and zero out
+    await supabase.from('registrations').update({ is_active: false, total_tuition: 0, total_paid: 0, updated_at: new Date().toISOString() }).eq('student_id', sid);
+    setConfirmDel(null); setDelWarning(null); setDelStep(0);
+    showToast('تم حذف الطالب وتصفير أرصدته'); loadData();
   };
 
   const openEdit = (s) => {
@@ -733,7 +764,7 @@ function StudentsPage() {
                   <div className="flex gap-2">
                     <button onClick={()=>openRegs(s)} className="text-primary-600 hover:text-primary-800" title="المواد">{Icons.eye}</button>
                     {hasPerm('students.edit') && <button onClick={()=>openEdit(s)} className="text-blue-600 hover:text-blue-800">{Icons.edit}</button>}
-                    {hasPerm('students.delete') && <button onClick={()=>setConfirmDel(s.id)} className="text-red-500 hover:text-red-700">{Icons.trash}</button>}
+                    {hasPerm('students.delete') && <button onClick={()=>tryDelete(s.id)} className="text-red-500 hover:text-red-700">{Icons.trash}</button>}
                   </div>
                 </td>
               </tr>
@@ -793,6 +824,40 @@ function StudentsPage() {
         )}
       </Modal>
       <ConfirmDialog isOpen={!!confirmDel} onConfirm={handleDelete} onCancel={()=>setConfirmDel(null)} message="هل أنت متأكد من حذف هذا الطالب؟"/>
+      {/* Step 1: Warning about student data */}
+      <Modal isOpen={delStep===1} onClose={()=>{setDelStep(0);setDelWarning(null)}} title="⚠️ تنبيه: الطالب لديه حسابات!">
+        {delWarning && <div className="space-y-3">
+          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 text-center">
+            <p className="text-red-700 font-bold text-lg mb-2">هذا الطالب لديه بيانات مسجلة!</p>
+            <div className="text-sm text-red-600 space-y-1">
+              {delWarning.numRegs > 0 && <p>مواد مسجلة: <b>{delWarning.numRegs}</b> مادة</p>}
+              {delWarning.totalPaid > 0 && <p>إجمالي المدفوع: <b>{formatMoney(delWarning.totalPaid)} د.ع</b></p>}
+              {delWarning.totalOutstanding > 0 && <p>أرصدة متبقية: <b className="text-red-800">{formatMoney(delWarning.totalOutstanding)} د.ع</b></p>}
+              {delWarning.numReservs > 0 && <p>حجوزات: <b>{delWarning.numReservs}</b> وصل</p>}
+              {delWarning.numPays > 0 && <p>دفعات: <b>{delWarning.numPays}</b> وصل</p>}
+            </div>
+          </div>
+          <p className="text-center text-gray-600 text-sm">عند الحذف سيتم تصفير جميع الأرصدة المعلقة.</p>
+          <div className="flex gap-3 justify-center pt-2">
+            <button className="btn-primary bg-red-600 hover:bg-red-700" onClick={()=>setDelStep(2)}>متأكد، أريد الحذف</button>
+            <button className="btn-ghost" onClick={()=>{setDelStep(0);setDelWarning(null)}}>إلغاء</button>
+          </div>
+        </div>}
+      </Modal>
+      {/* Step 2: Final confirmation */}
+      <Modal isOpen={delStep===2} onClose={()=>{setDelStep(0);setDelWarning(null)}} title="⛔ تأكيد نهائي للحذف">
+        <div className="space-y-4">
+          <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 text-center">
+            <p className="text-2xl mb-2">⚠️</p>
+            <p className="text-yellow-800 font-bold">هل أنت متأكد تماماً؟</p>
+            <p className="text-yellow-700 text-sm mt-1">هذه العملية ستحذف الطالب وتصفّر جميع أرصدته. لا يمكن التراجع عنها!</p>
+          </div>
+          <div className="flex gap-3 justify-center pt-2">
+            <button className="btn-primary bg-red-700 hover:bg-red-800" onClick={handleDelete}>نعم، احذف نهائياً</button>
+            <button className="btn-ghost" onClick={()=>{setDelStep(0);setDelWarning(null)}}>لا، تراجع</button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
