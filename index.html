@@ -1449,6 +1449,7 @@ function PayoutsPage() {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [printData, setPrintData] = useState(null);
 
   useEffect(() => { loadData(); }, [activeYear]);
 
@@ -1540,7 +1541,7 @@ function PayoutsPage() {
                 <td>{formatMoney(p.balance_after)} د.ع</td>
                 <td>{formatDate(p.payout_date)}</td>
                 <td className="text-xs text-gray-500">{p.creator?.full_name || '-'}</td>
-                <td><div className="flex gap-2">{hasPerm('payouts.add') && <button onClick={()=>openEdit(p)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('payouts.delete') && <button onClick={()=>setConfirmDel(p.id)} className="text-red-500">{Icons.trash}</button>}</div></td>
+                <td><div className="flex gap-2">{hasPerm('payouts.add') && <button onClick={()=>openEdit(p)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('payouts.delete') && <button onClick={()=>setConfirmDel(p.id)} className="text-red-500">{Icons.trash}</button>}<button onClick={()=>setPrintData(p)} className="text-primary-600">{Icons.print}</button></div></td>
               </tr>
             ))}
             {filtered.length===0 && <tr><td colSpan="8" className="text-center py-8 text-gray-400">لا توجد صرفيات</td></tr>}
@@ -1565,6 +1566,7 @@ function PayoutsPage() {
         </div>
       </Modal>
       <ConfirmDialog isOpen={!!confirmDel} onConfirm={handleDelete} onCancel={()=>setConfirmDel(null)} message="هل أنت متأكد من مسح هذا الوصل؟"/>
+      {printData && <ReceiptPrint type="payout" data={printData} onClose={()=>setPrintData(null)}/>}
     </div>
   );
 }
@@ -1585,6 +1587,7 @@ function ExpensesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [printData, setPrintData] = useState(null);
   const [form, setForm] = useState({ category_id:'', amount:'', recipient:'', description:'', expense_date: todayStr() });
 
   useEffect(() => { loadData(); }, [activeYear]);
@@ -1676,7 +1679,7 @@ function ExpensesPage() {
                 <td className="text-sm text-gray-500">{e.description || '-'}</td>
                 <td>{formatDate(e.expense_date)}</td>
                 <td className="text-xs text-gray-500">{e.creator?.full_name || '-'}</td>
-                <td><div className="flex gap-2">{hasPerm('expenses.edit') && <button onClick={()=>openEdit(e)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('expenses.delete') && <button onClick={()=>setConfirmDel(e.id)} className="text-red-500">{Icons.trash}</button>}</div></td>
+                <td><div className="flex gap-2">{hasPerm('expenses.edit') && <button onClick={()=>openEdit(e)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('expenses.delete') && <button onClick={()=>setConfirmDel(e.id)} className="text-red-500">{Icons.trash}</button>}<button onClick={()=>setPrintData(e)} className="text-primary-600">{Icons.print}</button></div></td>
               </tr>
             ))}
             {filtered.length===0 && <tr><td colSpan="8" className="text-center py-8 text-gray-400">لا توجد مصروفات</td></tr>}
@@ -1699,6 +1702,7 @@ function ExpensesPage() {
         </div>
       </Modal>
       <ConfirmDialog isOpen={!!confirmDel} onConfirm={handleDelete} onCancel={()=>setConfirmDel(null)} message="هل أنت متأكد من مسح هذا الوصل؟"/>
+      {printData && <ReceiptPrint type="expense" data={printData} onClose={()=>setPrintData(null)}/>}
     </div>
   );
 }
@@ -2454,14 +2458,28 @@ function ReceiptPrint({ type, data, onClose }) {
               <p style={{fontSize:11, color:'#666'}}>بغداد - الدورة - جمعية خير الله | هاتف: 07755757941</p>
               {type === 'reservation' && <div style={{background:'#1B3A5C', color:'white', padding:'5px 15px', borderRadius:20, display:'inline-block', fontSize:14, fontWeight:'bold', margin:'8px 0'}}>وصل حجز مقعد</div>}
               {type === 'payment' && <div style={{background:'#2D8B4E', color:'white', padding:'5px 15px', borderRadius:20, display:'inline-block', fontSize:14, fontWeight:'bold', margin:'8px 0'}}>وصل تسديد قسط</div>}
+              {type === 'payout' && <div style={{background:'#e74c3c', color:'white', padding:'5px 15px', borderRadius:20, display:'inline-block', fontSize:14, fontWeight:'bold', margin:'8px 0'}}>وصل صرف أستاذ</div>}
+              {type === 'expense' && <div style={{background:'#e67e22', color:'white', padding:'5px 15px', borderRadius:20, display:'inline-block', fontSize:14, fontWeight:'bold', margin:'8px 0'}}>وصل مصروفات</div>}
             </div>
             <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
               <span>رقم الوصل: <b>{data.receipt_number || data.voucher_number}</b></span>
               <span>التاريخ: <b>{formatDate(data.receipt_date || data.payout_date || data.expense_date)}</b></span>
             </div>
-            <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
+            {(type === 'reservation' || type === 'payment') && <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
               <span>الطالب: <b>{data.students?.full_name || '-'}</b></span>
               {data.students?.grade_levels?.name && <span>المرحلة: <b>{data.students?.grade_levels?.name}</b></span>}
+            </div>}
+            {type === 'payout' && <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
+              <span>الأستاذ: <b>{data.teachers?.full_name || '-'}</b></span>
+              <span>الرصيد قبل: <b>{formatMoney(data.balance_before)} د.ع</b></span>
+              <span>الرصيد بعد: <b>{formatMoney(data.balance_after)} د.ع</b></span>
+            </div>}
+            {type === 'expense' && <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
+              <span>الصنف: <b>{data.expense_categories?.name || '-'}</b></span>
+              {data.description && <span>الوصف: <b>{data.description}</b></span>}
+            </div>}
+            <div style={{padding:'4px 0', fontSize:12, color:'#555', borderBottom:'1px dotted #ddd'}}>
+              <span>منظم الوصل: <b>{data.creator?.full_name || '-'}</b></span>
             </div>
             {/* Show subjects - multi or single */}
             {type === 'reservation' && (data.seat_reservation_items||[]).length > 0 ? (
@@ -2479,8 +2497,8 @@ function ReceiptPrint({ type, data, onClose }) {
                 {data.registrations?.teachers?.full_name && <span style={{marginRight:20}}>الأستاذ: <b>{data.registrations?.teachers?.full_name}</b></span>}
               </div>
             ) : null}
-            <div style={{background:'#f0f7f0', border:'2px solid #2D8B4E', borderRadius:8, padding:10, textAlign:'center', margin:'10px 0'}}>
-              <div style={{fontSize:24, fontWeight:'bold', color:'#2D8B4E'}}>{formatMoney(data.amount || data.total_amount)} د.ع</div>
+            <div style={{background: type==='payout' ? '#fef0f0' : type==='expense' ? '#fff8f0' : '#f0f7f0', border: `2px solid ${type==='payout' ? '#e74c3c' : type==='expense' ? '#e67e22' : '#2D8B4E'}`, borderRadius:8, padding:10, textAlign:'center', margin:'10px 0'}}>
+              <div style={{fontSize:24, fontWeight:'bold', color: type==='payout' ? '#e74c3c' : type==='expense' ? '#e67e22' : '#2D8B4E'}}>{formatMoney(data.amount || data.total_amount)} د.ع</div>
               <div style={{fontSize:11, color:'#666'}}>فقط {formatMoney(data.amount || data.total_amount)} دينار عراقي لا غير</div>
             </div>
             {data.notes && <div style={{padding:'5px 0', fontSize:12, color:'#555'}}>ملاحظات: <b>{data.notes}</b></div>}
