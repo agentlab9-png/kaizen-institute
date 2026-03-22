@@ -31,6 +31,7 @@ body { background: #f0f2f5; }
 .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 .btn-primary { background: #1B3A5C; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
 .btn-primary:hover { background: #122844; }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-accent { background: #2D8B4E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
 .btn-accent:hover { background: #1f6b3a; }
 .btn-danger { background: #dc2626; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
@@ -531,7 +532,7 @@ function LoginPage({ onLogin }) {
 // SIDEBAR
 // ============================================
 function Sidebar({ activePage, setActivePage, user, onLogout }) {
-  const hasPerm = (key) => user.role === 'admin' || user.permissions[key];
+  const hasPerm = (key) => user.role === 'admin' || (user.permissions && user.permissions[key]);
   const items = [
     { id:'dashboard', label:'لوحة التحكم', icon: Icons.dashboard, perm:'dashboard.view' },
     { id:'students', label:'الطلاب', icon: Icons.students, perm:'students.view' },
@@ -785,7 +786,7 @@ function StudentsPage() {
   const showToast = useContext(ToastContext);
   const { activeYear } = useContext(YearContext);
   const { user } = useContext(AuthContext);
-  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const hasPerm = (k) => user.role==='admin' || (user.permissions && user.permissions[k]);
   const [students, setStudents] = useState([]);
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -869,7 +870,8 @@ function StudentsPage() {
   const handleDelete = async () => {
     const sid = confirmDel || delWarning?.studentId;
     // Deactivate student
-    await supabase.from('students').update({ is_active: false, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', sid);
+    const { error } = await supabase.from('students').update({ is_active: false, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', sid);
+    if(error) { showToast('خطأ في حذف الطالب', 'error'); return; }
     // Deactivate registrations and zero out
     await supabase.from('registrations').update({ is_active: false, total_tuition: 0, total_paid: 0, updated_at: new Date().toISOString() }).eq('student_id', sid);
     logAudit(user, 'حذف طالب', 'students', sid);
@@ -911,7 +913,7 @@ function StudentsPage() {
     setRegistrations(data || []);
   };
 
-  const filtered = students.filter(s => s.full_name.includes(search) || (s.student_phone||'').includes(search));
+  const filtered = students.filter(s => !search || s.full_name?.includes(search) || (s.student_phone||'').includes(search));
   useEffect(() => { setPage(1); }, [search]);
 
   if(loading) return <Loading/>;
@@ -1043,7 +1045,7 @@ function StudentsPage() {
 function TeachersPage() {
   const showToast = useContext(ToastContext);
   const { user } = useContext(AuthContext);
-  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const hasPerm = (k) => user.role==='admin' || (user.permissions && user.permissions[k]);
   const [teachers, setTeachers] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1074,20 +1076,26 @@ function TeachersPage() {
     if(form.phone && !/^07[3-9]\d{8}$/.test(form.phone)) { showToast('رقم الهاتف غير صحيح (يجب أن يبدأ بـ 07 ويتكون من 11 رقم)', 'error'); return; }
     const payload = { full_name: form.full_name.trim(), phone: form.phone, commission_type: form.commission_type, commission_value: commVal };
     if(editing) {
-      await supabase.from('teachers').update({...payload, updated_by: user.user_id, updated_at: new Date().toISOString()}).eq('id', editing.id);
+      const { error } = await supabase.from('teachers').update({...payload, updated_by: user.user_id, updated_at: new Date().toISOString()}).eq('id', editing.id);
+      if(error) { showToast('خطأ في التحديث', 'error'); return; }
       await supabase.from('teacher_subjects').delete().eq('teacher_id', editing.id);
       if(form.subject_ids.length) await supabase.from('teacher_subjects').insert(form.subject_ids.map(sid=>({teacher_id:editing.id, subject_id:sid})));
+      logAudit(user, 'تعديل أستاذ', 'teachers', editing.id, form.full_name.trim());
       showToast('تم تحديث بيانات الأستاذ');
     } else {
-      const { data } = await supabase.from('teachers').insert(payload).select().single();
-      if(data && form.subject_ids.length) await supabase.from('teacher_subjects').insert(form.subject_ids.map(sid=>({teacher_id:data.id, subject_id:sid})));
+      const { data, error } = await supabase.from('teachers').insert(payload).select().single();
+      if(error || !data) { showToast('خطأ في الإضافة', 'error'); return; }
+      if(form.subject_ids.length) await supabase.from('teacher_subjects').insert(form.subject_ids.map(sid=>({teacher_id:data.id, subject_id:sid})));
+      logAudit(user, 'إضافة أستاذ', 'teachers', data.id, form.full_name.trim());
       showToast('تم إضافة الأستاذ بنجاح');
     }
     setShowModal(false); setEditing(null); loadData();
   };
 
   const handleDelete = async () => {
-    await supabase.from('teachers').update({ is_active: false }).eq('id', confirmDel);
+    const { error } = await supabase.from('teachers').update({ is_active: false, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
+    if(error) { showToast('خطأ في حذف الأستاذ', 'error'); return; }
+    logAudit(user, 'حذف أستاذ', 'teachers', confirmDel);
     setConfirmDel(null); showToast('تم حذف الأستاذ'); loadData();
   };
 
@@ -1101,7 +1109,7 @@ function TeachersPage() {
     setForm(f => ({ ...f, subject_ids: f.subject_ids.includes(sid) ? f.subject_ids.filter(id=>id!==sid) : [...f.subject_ids, sid] }));
   };
 
-  const filtered = teachers.filter(t => t.full_name.includes(search) || (t.phone||'').includes(search));
+  const filtered = teachers.filter(t => !search || t.full_name?.includes(search) || (t.phone||'').includes(search));
 
   if(loading) return <Loading/>;
 
@@ -1172,7 +1180,7 @@ function ReservationsPage() {
   const showToast = useContext(ToastContext);
   const { activeYear } = useContext(YearContext);
   const { user } = useContext(AuthContext);
-  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const hasPerm = (k) => user.role==='admin' || (user.permissions && user.permissions[k]);
   const [reservations, setReservations] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1243,7 +1251,8 @@ function ReservationsPage() {
   };
 
   const handleDelete = async () => {
-    await supabase.from('seat_reservations').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
+    const { error } = await supabase.from('seat_reservations').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
+    if(error) { showToast('خطأ في حذف الوصل', 'error'); return; }
     logAudit(user, 'حذف وصل حجز', 'seat_reservations', confirmDel);
     showToast('تم مسح الوصل'); setConfirmDel(null); loadData();
   };
@@ -1297,7 +1306,7 @@ function ReservationsPage() {
   };
 
   const filtered = reservations.filter(r => {
-    const matchSearch = r.students?.full_name?.includes(search) || r.receipt_number?.includes(search);
+    const matchSearch = !search || r.students?.full_name?.includes(search) || (r.receipt_number||'').includes(search);
     const d = r.receipt_date; const matchFrom = !dateFrom || d >= dateFrom; const matchTo = !dateTo || d <= dateTo;
     return matchSearch && matchFrom && matchTo;
   });
@@ -1396,7 +1405,7 @@ function PaymentsPage() {
   const showToast = useContext(ToastContext);
   const { activeYear } = useContext(YearContext);
   const { user } = useContext(AuthContext);
-  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const hasPerm = (k) => user.role==='admin' || (user.permissions && user.permissions[k]);
   const [payments, setPayments] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1410,6 +1419,7 @@ function PaymentsPage() {
   const [page, setPage] = useState(1);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => { loadData(); }, [activeYear]);
   useEffect(() => { setPage(1); }, [search, dateFrom, dateTo]);
@@ -1426,7 +1436,8 @@ function PaymentsPage() {
   };
 
   const handleDelete = async () => {
-    await supabase.from('payments').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
+    const { error } = await supabase.from('payments').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
+    if(error) { showToast('خطأ في حذف الوصل', 'error'); return; }
     logAudit(user, 'حذف وصل دفع', 'payments', confirmDel);
     showToast('تم مسح الوصل'); setConfirmDel(null); loadData();
   };
@@ -1457,12 +1468,11 @@ function PaymentsPage() {
   };
 
   const handleSave = async () => {
+    if(saving) return;
     if(!form.student_id || !form.total_amount) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
     if(studentRegs.length === 0) { showToast('الطالب غير مسجل في أي مادة', 'error'); return; }
-
     const total = parseInt(form.total_amount);
     if(!total || total <= 0 || isNaN(total)) { showToast('يرجى إدخال مبلغ صحيح أكبر من صفر', 'error'); return; }
-    let allocs = [];
 
     // Validate manual distribution doesn't exceed total
     if(form.allocation_type === 'manual') {
@@ -1477,6 +1487,9 @@ function PaymentsPage() {
       }
     }
 
+    setSaving(true);
+    try {
+    let allocs = [];
     const calcInstShare = (amt, reg) => {
       if(!reg || !amt) return 0;
       if(reg.teachers?.commission_type === 'percentage') return Math.round(amt * reg.teachers.commission_value / 100);
@@ -1517,21 +1530,23 @@ function PaymentsPage() {
         total_amount: total, allocation_type: form.allocation_type, receipt_date: form.receipt_date, created_by: user.user_id
       }).select('*,students(full_name)').single();
 
-      if(error) { showToast('خطأ في الحفظ', 'error'); return; }
+      if(error || !payment) { showToast('خطأ في الحفظ', 'error'); return; }
 
       if(allocs.length > 0) {
-        await supabase.from('payment_allocations').insert(allocs.map(a=>({...a, payment_id: payment.id})));
+        const { error: allocErr } = await supabase.from('payment_allocations').insert(allocs.map(a=>({...a, payment_id: payment.id})));
+        if(allocErr) { showToast('خطأ في حفظ التوزيعات', 'error'); return; }
       }
-      logAudit(user, 'إنشاء وصل دفع', 'payments', payment?.id, receiptNum+' - '+formatMoney(total)+' د.ع');
+      logAudit(user, 'إنشاء وصل دفع', 'payments', payment.id, receiptNum+' - '+formatMoney(total)+' د.ع');
       showToast('تم إنشاء وصل الدفع بنجاح');
     }
     setShowModal(false);
     setEditing(null);
     loadData();
+    } finally { setSaving(false); }
   };
 
   const filtered = payments.filter(p => {
-    const matchSearch = p.students?.full_name?.includes(search) || p.receipt_number?.includes(search);
+    const matchSearch = !search || p.students?.full_name?.includes(search) || (p.receipt_number||'').includes(search);
     const d = p.receipt_date; const matchFrom = !dateFrom || d >= dateFrom; const matchTo = !dateTo || d <= dateTo;
     return matchSearch && matchFrom && matchTo;
   });
@@ -1625,7 +1640,7 @@ function PaymentsPage() {
               </div>;
             })()}
           </>}
-          <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>{editing ? 'تحديث الوصل' : 'إنشاء الوصل'}</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
+          <div className="flex gap-3 pt-2"><button className="btn-primary" disabled={saving} onClick={handleSave}>{saving ? 'جاري الحفظ...' : (editing ? 'تحديث الوصل' : 'إنشاء الوصل')}</button><button className="btn-ghost" onClick={()=>setShowModal(false)}>إلغاء</button></div>
         </div>
       </Modal>
       {printData && <ReceiptPrint type="payment" data={printData} onClose={()=>setPrintData(null)}/>}
@@ -1641,7 +1656,7 @@ function PayoutsPage() {
   const showToast = useContext(ToastContext);
   const { activeYear } = useContext(YearContext);
   const { user } = useContext(AuthContext);
-  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const hasPerm = (k) => user.role==='admin' || (user.permissions && user.permissions[k]);
   const [payouts, setPayouts] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1671,7 +1686,8 @@ function PayoutsPage() {
   };
 
   const handleDelete = async () => {
-    await supabase.from('teacher_payouts').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
+    const { error } = await supabase.from('teacher_payouts').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
+    if(error) { showToast('خطأ في حذف الوصل', 'error'); return; }
     logAudit(user, 'حذف وصل صرف', 'teacher_payouts', confirmDel);
     showToast('تم مسح الوصل'); setConfirmDel(null); loadData();
   };
@@ -1738,7 +1754,7 @@ function PayoutsPage() {
   };
 
   const filtered = payouts.filter(p => {
-    const matchSearch = p.teachers?.full_name?.includes(search) || p.voucher_number?.includes(search);
+    const matchSearch = !search || p.teachers?.full_name?.includes(search) || (p.voucher_number||'').includes(search);
     const d = p.payout_date; const matchFrom = !dateFrom || d >= dateFrom; const matchTo = !dateTo || d <= dateTo;
     return matchSearch && matchFrom && matchTo;
   });
@@ -1811,7 +1827,7 @@ function ExpensesPage() {
   const showToast = useContext(ToastContext);
   const { activeYear } = useContext(YearContext);
   const { user } = useContext(AuthContext);
-  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const hasPerm = (k) => user.role==='admin' || (user.permissions && user.permissions[k]);
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1841,7 +1857,8 @@ function ExpensesPage() {
   };
 
   const handleDelete = async () => {
-    await supabase.from('expenses').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
+    const { error } = await supabase.from('expenses').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
+    if(error) { showToast('خطأ في حذف الوصل', 'error'); return; }
     logAudit(user, 'حذف وصل مصروف', 'expenses', confirmDel);
     showToast('تم مسح الوصل'); setConfirmDel(null); loadData();
   };
@@ -1886,7 +1903,7 @@ function ExpensesPage() {
   };
 
   const filtered = expenses.filter(e => {
-    const matchSearch = !search || e.expense_categories?.name?.includes(search) || e.recipient?.includes(search) || e.voucher_number?.includes(search);
+    const matchSearch = !search || e.expense_categories?.name?.includes(search) || (e.recipient||'').includes(search) || (e.voucher_number||'').includes(search);
     const matchCat = !filterCat || e.category_id === filterCat;
     const d = e.expense_date; const matchFrom = !dateFrom || d >= dateFrom; const matchTo = !dateTo || d <= dateTo;
     return matchSearch && matchCat && matchFrom && matchTo;
@@ -2325,12 +2342,12 @@ function SettingsPage() {
       supabase.from('subjects').select('*').eq('is_active', true).order('sort_order', {ascending:true}),
       supabase.from('grade_levels').select('*').eq('is_active', true).order('sort_order', {ascending:true}),
       supabase.from('expense_categories').select('*').eq('is_active', true).order('sort_order', {ascending:true}),
-      supabase.from('institute_settings').select('*').limit(1).single()
+      supabase.from('institute_settings').select('*').limit(1)
     ]);
     setSubjects(subRes.data||[]);
     setGrades(grRes.data||[]);
     setCategories(catRes.data||[]);
-    setSettings(setRes.data);
+    setSettings(Array.isArray(setRes.data) ? setRes.data[0] || null : setRes.data);
     setLoading(false);
   };
 
@@ -2350,20 +2367,25 @@ function SettingsPage() {
       if(data) { const newYears = [...years, data]; setYears(newYears); }
       showToast('تم إضافة السنة الدراسية');
     } else if(modalType==='subject') {
-      await supabase.from('subjects').insert({ name_ar: form.name_ar, name_en: form.name_en, sort_order: subjects.length+1 });
+      const { error } = await supabase.from('subjects').insert({ name_ar: form.name_ar, name_en: form.name_en, sort_order: subjects.length+1 });
+      if(error) { showToast('خطأ في إضافة المادة', 'error'); return; }
       showToast('تم إضافة المادة');
     } else if(modalType==='grade') {
-      await supabase.from('grade_levels').insert({ name: form.name, sort_order: grades.length+1 });
+      const { error } = await supabase.from('grade_levels').insert({ name: form.name, sort_order: grades.length+1 });
+      if(error) { showToast('خطأ في إضافة المرحلة', 'error'); return; }
       showToast('تم إضافة المرحلة');
     } else if(modalType==='category') {
-      await supabase.from('expense_categories').insert({ name: form.name, sort_order: categories.length+1 });
+      const { error } = await supabase.from('expense_categories').insert({ name: form.name, sort_order: categories.length+1 });
+      if(error) { showToast('خطأ في إضافة الصنف', 'error'); return; }
       showToast('تم إضافة الصنف');
     }
     setShowModal(false); loadAll();
   };
 
   const setActiveYearFn = async (yearId) => {
-    await supabase.from('academic_years').update({ is_active: false }).neq('id', 'none');
+    // Deactivate current active year first, then activate the new one
+    const currentActive = years.find(y => y.is_active);
+    if(currentActive) await supabase.from('academic_years').update({ is_active: false }).eq('id', currentActive.id);
     await supabase.from('academic_years').update({ is_active: true }).eq('id', yearId);
     const { data: updatedYears } = await supabase.from('academic_years').select('*').order('name', {ascending:false});
     setYears(updatedYears||[]);
@@ -2529,7 +2551,9 @@ function UserMgmtPage() {
   };
 
   const handleDelete = async () => {
-    await supabase.from('profiles').update({ is_active: false }).eq('id', confirmDel);
+    const { error } = await supabase.from('profiles').update({ is_active: false }).eq('id', confirmDel);
+    if(error) { showToast('خطأ في تعطيل المستخدم', 'error'); return; }
+    logAudit(user, 'تعطيل مستخدم', 'profiles', confirmDel);
     showToast('تم تعطيل المستخدم'); setConfirmDel(null); loadUsers();
   };
 
@@ -2550,7 +2574,8 @@ function UserMgmtPage() {
       if(error) { showToast('خطأ في التحديث: ' + (error.message||''), 'error'); return; }
       showToast('تم تحديث بيانات المستخدم');
     } else {
-      const { data: hash } = await supabase.rpc('hash_password', { p_password: form.password });
+      const { data: hash, error: hashErr } = await supabase.rpc('hash_password', { p_password: form.password });
+      if(hashErr || !hash) { showToast('خطأ في تشفير كلمة المرور', 'error'); return; }
       const hashVal = Array.isArray(hash) ? hash[0] : hash;
       const { error } = await supabase.from('profiles').insert({
         username: form.username, password_hash: hashVal, full_name: form.full_name, role: form.role
@@ -2825,28 +2850,29 @@ function TrashPage() {
   const handleRestore = async () => {
     if(!confirmRestore) return;
     const item = confirmRestore;
-    try {
-      switch(activeTab) {
-        case 'reservations':
-          await supabase.rpc('restore_reservation', { p_reservation_id: item.id });
-          break;
-        case 'payments':
-          await supabase.rpc('restore_payment', { p_payment_id: item.id });
-          break;
-        case 'payouts':
-          await supabase.rpc('restore_payout', { p_payout_id: item.id });
-          break;
-        case 'expenses':
-          await supabase.rpc('restore_expense', { p_expense_id: item.id });
-          break;
-        case 'students':
-          await supabase.rpc('restore_student', { p_student_id: item.id });
-          break;
-      }
-      showToast('تم استرجاع العنصر بنجاح ✓');
-      setConfirmRestore(null);
-      loadData();
-    } catch(e) { showToast('خطأ في الاسترجاع', 'error'); }
+    let result;
+    switch(activeTab) {
+      case 'reservations':
+        result = await supabase.rpc('restore_reservation', { p_reservation_id: item.id });
+        break;
+      case 'payments':
+        result = await supabase.rpc('restore_payment', { p_payment_id: item.id });
+        break;
+      case 'payouts':
+        result = await supabase.rpc('restore_payout', { p_payout_id: item.id });
+        break;
+      case 'expenses':
+        result = await supabase.rpc('restore_expense', { p_expense_id: item.id });
+        break;
+      case 'students':
+        result = await supabase.rpc('restore_student', { p_student_id: item.id });
+        break;
+    }
+    if(result?.error) { showToast('خطأ في الاسترجاع: ' + (result.error.message||''), 'error'); setConfirmRestore(null); return; }
+    logAudit(user, 'استرجاع عنصر', activeTab, item.id);
+    showToast('تم استرجاع العنصر بنجاح');
+    setConfirmRestore(null);
+    loadData();
   };
 
   const getSubjectsText = (r) => {
@@ -2992,7 +3018,7 @@ function TrashPage() {
 // ============================================
 function MoreMenu({ setActivePage }) {
   const { user } = useContext(AuthContext);
-  const hasPerm = (k) => user.role==='admin' || user.permissions[k];
+  const hasPerm = (k) => user.role==='admin' || (user.permissions && user.permissions[k]);
   const items = [
     { id:'expenses', label:'المصروفات', icon:Icons.receipt, perm:'expenses.view' },
     { id:'reports', label:'التقارير', icon:Icons.reports, perm:'reports.revenue' },
@@ -3174,7 +3200,9 @@ function MonthlyChartReport() {
     (expRes.data||[]).forEach(r => { const m = r.expense_date?.substring(0,7); if(m) { if(!months[m]) months[m]={revenue:0,expenses:0}; months[m].expenses += r.amount; }});
     const sorted = Object.entries(months).sort((a,b)=>a[0].localeCompare(b[0])).map(([month, vals]) => {
       const [y,m] = month.split('-');
-      return { month, label: monthNames[parseInt(m)-1] + ' ' + y, ...vals, profit: vals.revenue - vals.expenses };
+      const mi = parseInt(m) - 1;
+      const label = (mi >= 0 && mi < 12 ? monthNames[mi] : m) + ' ' + y;
+      return { month, label, ...vals, profit: vals.revenue - vals.expenses };
     });
     setMonthlyData(sorted);
     setLoading(false);
