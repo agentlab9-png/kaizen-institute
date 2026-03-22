@@ -216,10 +216,10 @@ const todayStr = () => new Date().toISOString().split('T')[0];
 const ALL_PERMISSIONS = [
   { group: 'الطلاب', keys: ['students.view','students.add','students.edit','students.delete'] },
   { group: 'الأساتذة', keys: ['teachers.view','teachers.add','teachers.edit','teachers.delete'] },
-  { group: 'حجز المقاعد', keys: ['reservations.view','reservations.add','reservations.edit'] },
-  { group: 'دفعات الطلاب', keys: ['payments.view','payments.add','payments.edit'] },
-  { group: 'صرف الأساتذة', keys: ['payouts.view','payouts.add','payouts.edit'] },
-  { group: 'المصروفات', keys: ['expenses.view','expenses.add','expenses.edit','expenses.categories'] },
+  { group: 'حجز المقاعد', keys: ['reservations.view','reservations.add','reservations.edit','reservations.delete'] },
+  { group: 'دفعات الطلاب', keys: ['payments.view','payments.add','payments.edit','payments.delete'] },
+  { group: 'صرف الأساتذة', keys: ['payouts.view','payouts.add','payouts.edit','payouts.delete'] },
+  { group: 'المصروفات', keys: ['expenses.view','expenses.add','expenses.edit','expenses.delete','expenses.categories'] },
   { group: 'التقارير', keys: ['reports.revenue','reports.expenses','reports.pnl','reports.student_stmt','reports.teacher_stmt','reports.late_payments'] },
   { group: 'لوحة التحكم', keys: ['dashboard.view','dashboard.numbers'] },
   { group: 'الإعدادات', keys: ['settings.years','settings.subjects','settings.grades','settings.institute'] },
@@ -228,10 +228,10 @@ const ALL_PERMISSIONS = [
 const PERM_LABELS = {
   'students.view':'عرض الطلاب','students.add':'إضافة طلاب','students.edit':'تعديل طلاب','students.delete':'حذف طلاب',
   'teachers.view':'عرض الأساتذة','teachers.add':'إضافة أساتذة','teachers.edit':'تعديل أساتذة','teachers.delete':'حذف أساتذة',
-  'reservations.view':'عرض الحجوزات','reservations.add':'إنشاء وصل حجز','reservations.edit':'تعديل الحجوزات',
-  'payments.view':'عرض الدفعات','payments.add':'إنشاء وصل دفع','payments.edit':'تعديل الدفعات',
-  'payouts.view':'عرض الصرفيات','payouts.add':'إنشاء وصل صرف','payouts.edit':'تعديل الصرفيات',
-  'expenses.view':'عرض المصروفات','expenses.add':'إنشاء وصل مصروف','expenses.edit':'تعديل المصروفات','expenses.categories':'إدارة الأصناف',
+  'reservations.view':'عرض الحجوزات','reservations.add':'إنشاء وصل حجز','reservations.edit':'تعديل الحجوزات','reservations.delete':'حذف الحجوزات',
+  'payments.view':'عرض الدفعات','payments.add':'إنشاء وصل دفع','payments.edit':'تعديل الدفعات','payments.delete':'حذف الدفعات',
+  'payouts.view':'عرض الصرفيات','payouts.add':'إنشاء وصل صرف','payouts.edit':'تعديل الصرفيات','payouts.delete':'حذف الصرفيات',
+  'expenses.view':'عرض المصروفات','expenses.add':'إنشاء وصل مصروف','expenses.edit':'تعديل المصروفات','expenses.delete':'حذف المصروفات','expenses.categories':'إدارة الأصناف',
   'reports.revenue':'تقرير الإيرادات','reports.expenses':'تقرير المصروفات','reports.pnl':'تقرير الأرباح والخسائر',
   'reports.student_stmt':'كشف حساب طالب','reports.teacher_stmt':'كشف حساب أستاذ','reports.late_payments':'تقرير المتأخرين',
   'dashboard.view':'عرض لوحة التحكم','dashboard.numbers':'عرض الأرقام المالية',
@@ -1390,23 +1390,25 @@ function PaymentsPage() {
       }
     }
 
+    const calcInstShare = (amt, reg) => {
+      if(!reg || !amt) return 0;
+      if(reg.teachers?.commission_type === 'percentage') return Math.round(amt * reg.teachers.commission_value / 100);
+      if(reg.total_tuition > 0) return Math.round(amt * reg.institute_share / reg.total_tuition);
+      return amt;
+    };
     if(form.allocation_type === 'equal') {
       const perSubject = Math.floor(total / studentRegs.length);
       let remainder = total - (perSubject * studentRegs.length);
       allocs = studentRegs.map((r, i) => {
         const amt = perSubject + (i === 0 ? remainder : 0);
-        const instShare = r.teachers?.commission_type === 'percentage'
-          ? Math.round(amt * r.teachers.commission_value / 100)
-          : Math.round(amt * r.institute_share / r.total_tuition);
+        const instShare = calcInstShare(amt, r);
         return { registration_id: r.id, amount: amt, institute_share: instShare, teacher_share: amt - instShare };
       });
     } else {
       allocs = form.allocations.filter(a => a.amount > 0).map(a => {
         const reg = studentRegs.find(r => r.id === a.registration_id);
         const amt = parseInt(a.amount);
-        const instShare = reg?.teachers?.commission_type === 'percentage'
-          ? Math.round(amt * reg.teachers.commission_value / 100)
-          : Math.round(amt * reg.institute_share / reg.total_tuition);
+        const instShare = calcInstShare(amt, reg);
         return { registration_id: a.registration_id, amount: amt, institute_share: instShare, teacher_share: amt - instShare };
       });
     }
@@ -1414,7 +1416,7 @@ function PaymentsPage() {
     if(editing) {
       const { error } = await supabase.rpc('update_payment_allocations', {
         p_payment_id: editing.id, p_total_amount: total, p_allocation_type: form.allocation_type, p_receipt_date: form.receipt_date,
-        p_allocations: allocs.map(a=>({ registration_id: a.registration_id, amount: a.amount, institute_amount: a.institute_amount, teacher_amount: a.teacher_amount }))
+        p_allocations: allocs.map(a=>({ registration_id: a.registration_id, amount: a.amount, institute_amount: a.institute_share, teacher_amount: a.teacher_share }))
       });
       if(error) { showToast('خطأ في التحديث: ' + (error.message||''), 'error'); return; }
       showToast('تم تحديث وصل الدفع بنجاح');
@@ -1459,7 +1461,7 @@ function PaymentsPage() {
                 <td>{p.allocation_type==='equal'?'توزيع متساوي':'توزيع يدوي'}</td>
                 <td>{formatDate(p.receipt_date)}</td>
                 <td className="text-xs text-gray-500">{p.creator?.full_name || '-'}</td>
-                <td><div className="flex gap-2">{hasPerm('payments.add') && <button onClick={()=>openEdit(p)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('payments.delete') && <button onClick={()=>setConfirmDel(p.id)} className="text-red-500">{Icons.trash}</button>}<button onClick={()=>setPrintData(p)} className="text-primary-600">{Icons.print}</button></div></td>
+                <td><div className="flex gap-2">{hasPerm('payments.edit') && <button onClick={()=>openEdit(p)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('payments.delete') && <button onClick={()=>setConfirmDel(p.id)} className="text-red-500">{Icons.trash}</button>}<button onClick={()=>setPrintData(p)} className="text-primary-600">{Icons.print}</button></div></td>
               </tr>
             ))}
             {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا توجد دفعات</td></tr>}
@@ -1640,7 +1642,7 @@ function PayoutsPage() {
                 <td>{formatMoney(p.balance_after)} د.ع</td>
                 <td>{formatDate(p.payout_date)}</td>
                 <td className="text-xs text-gray-500">{p.creator?.full_name || '-'}</td>
-                <td><div className="flex gap-2">{hasPerm('payouts.add') && <button onClick={()=>openEdit(p)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('payouts.delete') && <button onClick={()=>setConfirmDel(p.id)} className="text-red-500">{Icons.trash}</button>}<button onClick={()=>setPrintData(p)} className="text-primary-600">{Icons.print}</button></div></td>
+                <td><div className="flex gap-2">{hasPerm('payouts.edit') && <button onClick={()=>openEdit(p)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('payouts.delete') && <button onClick={()=>setConfirmDel(p.id)} className="text-red-500">{Icons.trash}</button>}<button onClick={()=>setPrintData(p)} className="text-primary-600">{Icons.print}</button></div></td>
               </tr>
             ))}
             {filtered.length===0 && <tr><td colSpan="8" className="text-center py-8 text-gray-400">لا توجد صرفيات</td></tr>}
