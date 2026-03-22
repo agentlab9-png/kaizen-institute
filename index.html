@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script>
 tailwind.config = {
@@ -57,13 +59,14 @@ tr:hover td { background: #f8fafc; }
 .spinner { width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #1B3A5C; border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media print {
-  .no-print, .desktop-sidebar, .mobile-nav, header, nav, .card:not(.print-receipt),
-  button, .btn-primary, .btn-ghost, .btn-danger, select, input,
-  [class*="fixed bottom"], [class*="sticky"] { display: none !important; }
-  body, html { background: white !important; margin: 0; padding: 0; }
+  body, html { background: white !important; margin: 0 !important; padding: 0 !important; }
+  * { visibility: hidden !important; }
+  .print-receipt, .print-receipt * { visibility: visible !important; }
+  .print-receipt { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 20px !important; border: none !important; box-shadow: none !important; page-break-inside: avoid; }
+  .desktop-sidebar, .mobile-nav { display: none !important; }
   .main-content { margin: 0 !important; padding: 0 !important; }
-  .print-receipt { page-break-inside: avoid; display: block !important; border: none !important; box-shadow: none !important; }
   * { color-adjust: exact; -webkit-print-color-adjust: exact; }
+  @page { margin: 10mm; }
 }
 @media (max-width: 768px) {
   .desktop-sidebar { display: none; }
@@ -248,6 +251,45 @@ const exportToExcel = (data, headers, filename) => {
   XLSX.writeFile(wb, filename + '.xlsx');
 };
 
+const exportToPDF = async (elementRef, filename) => {
+  if(!elementRef) return;
+  try {
+    const el = elementRef;
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', direction: 'rtl' });
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+    const usableWidth = pageWidth - margin * 2;
+    const imgWidth = usableWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    if(imgHeight <= pageHeight - margin * 2) {
+      pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, imgHeight);
+    } else {
+      let y = 0;
+      const sliceHeight = Math.floor(canvas.width * (pageHeight - margin * 2) / imgWidth);
+      let pageNum = 0;
+      while(y < canvas.height) {
+        if(pageNum > 0) pdf.addPage();
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        const remaining = canvas.height - y;
+        sliceCanvas.height = Math.min(sliceHeight, remaining);
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.drawImage(canvas, 0, y, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
+        const sliceImg = sliceCanvas.toDataURL('image/png');
+        const sliceImgH = (sliceCanvas.height * imgWidth) / canvas.width;
+        pdf.addImage(sliceImg, 'PNG', margin, margin, imgWidth, sliceImgH);
+        y += sliceHeight;
+        pageNum++;
+      }
+    }
+    pdf.save(filename + '.pdf');
+  } catch(e) { console.error('PDF export error:', e); alert('خطأ في تصدير PDF'); }
+};
+
 const logAudit = (user, action, tableName, recordId, details) => {
   supabase.rpc('log_audit', { p_user_id: user.user_id, p_user_name: user.full_name, p_action: action, p_table_name: tableName, p_record_id: recordId || null, p_details: details || null });
 };
@@ -311,6 +353,8 @@ const Icons = {
   history: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
   backup: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
   chart: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>,
+  filePdf: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15h2" strokeWidth="3" stroke="#e74c3c"/></svg>,
+  fileExcel: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 15l3-3m0 0l3 3m-3-3v0" stroke="#27ae60" strokeWidth="2"/></svg>,
 };
 
 // ============================================
@@ -452,6 +496,23 @@ function DateRangeFilter({ dateFrom, dateTo, setDateFrom, setDateTo }) {
 }
 function ExportBtn({ onClick }) {
   return <button onClick={onClick} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm bg-green-50 text-green-700 hover:bg-green-100 border border-green-200" title="تصدير Excel">{Icons.download} تصدير Excel</button>;
+}
+
+function ReportExportBar({ printRef, pdfFilename, onExcelExport, onPrint }) {
+  const [exporting, setExporting] = React.useState(false);
+  const handlePDF = async () => {
+    if(!printRef?.current) return;
+    setExporting(true);
+    await exportToPDF(printRef.current, pdfFilename || 'تقرير');
+    setExporting(false);
+  };
+  return (
+    <div className="flex flex-wrap gap-2 no-print">
+      {onPrint && <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200" onClick={onPrint}>{Icons.print} طباعة</button>}
+      <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm bg-red-50 text-red-700 hover:bg-red-100 border border-red-200" onClick={handlePDF} disabled={exporting}>{exporting ? 'جاري التصدير...' : <>{Icons.filePdf} تصدير PDF</>}</button>
+      {onExcelExport && <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm bg-green-50 text-green-700 hover:bg-green-100 border border-green-200" onClick={onExcelExport}>{Icons.fileExcel} تصدير Excel</button>}
+    </div>
+  );
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -1997,6 +2058,12 @@ function ReportsPage() {
   const [dateTo, setDateTo] = useState('');
   const [studentStmt, setStudentStmt] = useState(null);
   const [teacherStmt, setTeacherStmt] = useState(null);
+  const studentStmtRef = React.useRef(null);
+  const teacherStmtRef = React.useRef(null);
+  const pnlRef = React.useRef(null);
+  const expReportRef = React.useRef(null);
+  const revenueReportRef = React.useRef(null);
+  const latePayRef = React.useRef(null);
 
   useEffect(() => {
     loadLists();
@@ -2119,8 +2186,12 @@ function ReportsPage() {
       {loading && <Loading/>}
 
       {/* Late Payments */}
-      {activeReport === 'late_payments' && !loading && Array.isArray(data) && (
-        <div className="card table-container">
+      {activeReport === 'late_payments' && !loading && Array.isArray(data) && (<>
+        <div className="mb-3"><ReportExportBar printRef={latePayRef} pdfFilename={'تقرير_المتأخرين_'+activeYear?.name} onPrint={()=>window.print()} onExcelExport={()=>{
+          const rows = data.map(r=>[r.students?.full_name, r.students?.grade_levels?.name, r.subjects?.name_ar, r.teachers?.full_name, r.total_tuition, r.total_paid, r.remaining_balance]);
+          exportToExcel(rows, ['الطالب','المرحلة','المادة','الأستاذ','القسط','المدفوع','المتبقي'], 'تقرير_المتأخرين_'+activeYear?.name);
+        }}/></div>
+        <div className="card table-container print-receipt" ref={latePayRef}>
           <table>
             <thead><tr><th>الطالب</th><th>المرحلة</th><th>المادة</th><th>الأستاذ</th><th>القسط الكلي</th><th>المدفوع</th><th>المتبقي</th></tr></thead>
             <tbody>
@@ -2139,7 +2210,7 @@ function ReportsPage() {
             </tbody>
           </table>
         </div>
-      )}
+      </>)}
 
       {/* Student Statement */}
       {activeReport === 'student_stmt' && !loading && (
@@ -2150,10 +2221,13 @@ function ReportsPage() {
               <SearchableSelect options={students.map(s=>({value:s.id, label:s.full_name}))} value={selectedStudent} onChange={v=>setSelectedStudent(v)} placeholder="ابحث عن الطالب..."/>
             </div>
             <button className="btn-primary" onClick={loadStudentStatement}>عرض الكشف</button>
-            {studentStmt && <button className="btn-ghost flex items-center gap-1" onClick={()=>window.print()}>{Icons.print} طباعة</button>}
+            {studentStmt && <ReportExportBar printRef={studentStmtRef} pdfFilename={'كشف_حساب_'+studentStmt.student?.full_name} onPrint={()=>window.print()} onExcelExport={()=>{
+              const rows = studentStmt.registrations.map(r=>[r.subjects?.name_ar, r.teachers?.full_name, r.total_tuition, r.total_paid, r.remaining_balance]);
+              exportToExcel(rows, ['المادة','الأستاذ','القسط','المدفوع','المتبقي'], 'كشف_حساب_'+studentStmt.student?.full_name);
+            }}/>}
           </div>
           {studentStmt && (
-            <div className="card p-6 print-receipt">
+            <div className="card p-6 print-receipt" ref={studentStmtRef}>
               <div className="text-center mb-6 border-b pb-4">
                 <h3 className="text-xl font-bold text-primary-700">معهد كايزن - Kaizen Institute</h3>
                 <p className="text-sm text-gray-500">بغداد - الدورة - جمعية خير الله | 07755757941</p>
@@ -2211,10 +2285,13 @@ function ReportsPage() {
               <SearchableSelect options={teachers.map(t=>({value:t.id, label:t.full_name}))} value={selectedTeacher} onChange={v=>setSelectedTeacher(v)} placeholder="ابحث عن الأستاذ..."/>
             </div>
             <button className="btn-primary" onClick={loadTeacherStatement}>عرض الكشف</button>
-            {teacherStmt && <button className="btn-ghost flex items-center gap-1" onClick={()=>window.print()}>{Icons.print} طباعة</button>}
+            {teacherStmt && <ReportExportBar printRef={teacherStmtRef} pdfFilename={'كشف_حساب_'+teacherStmt.teacher?.full_name} onPrint={()=>window.print()} onExcelExport={()=>{
+              const rows = teacherStmt.registrations.map(r=>[r.students?.full_name, r.students?.grade_levels?.name, r.subjects?.name_ar, r.total_tuition, r.institute_share, r.teacher_share, r.total_paid]);
+              exportToExcel(rows, ['الطالب','المرحلة','المادة','القسط','حصة المعهد','حصة الأستاذ','المدفوع'], 'كشف_حساب_'+teacherStmt.teacher?.full_name);
+            }}/>}
           </div>
           {teacherStmt && (
-            <div className="card p-6 print-receipt">
+            <div className="card p-6 print-receipt" ref={teacherStmtRef}>
               <div className="text-center mb-6 border-b pb-4">
                 <h3 className="text-xl font-bold text-primary-700">معهد كايزن - Kaizen Institute</h3>
                 <p className="text-sm text-gray-500">بغداد - الدورة - جمعية خير الله | 07755757941</p>
@@ -2256,8 +2333,13 @@ function ReportsPage() {
       )}
 
       {/* P&L */}
-      {activeReport === 'pnl' && !loading && data.totalRevenue !== undefined && (
-        <div className="card p-6 print-receipt">
+      {activeReport === 'pnl' && !loading && data.totalRevenue !== undefined && (<>
+        <div className="mb-3"><ReportExportBar printRef={pnlRef} pdfFilename={'تقرير_الأرباح_'+activeYear?.name} onPrint={()=>window.print()} onExcelExport={()=>{
+          const rows = Object.entries(data.expByCat||{}).map(([cat, amt])=>[cat, amt]);
+          rows.unshift(['إجمالي الإيرادات', data.totalRevenue], ['إجمالي المصروفات', data.totalExpenses], ['صافي الربح', data.netProfit], ['---','---']);
+          exportToExcel(rows, ['البند','المبلغ'], 'تقرير_الأرباح_'+activeYear?.name);
+        }}/></div>
+        <div className="card p-6 print-receipt" ref={pnlRef}>
           <div className="text-center mb-6 border-b pb-4">
             <h3 className="text-xl font-bold text-primary-700">معهد كايزن - Kaizen Institute</h3>
             <h4 className="text-lg font-bold mt-2">تقرير الأرباح والخسائر - {activeYear?.name}</h4>
@@ -2291,11 +2373,16 @@ function ReportsPage() {
             </div>
           )}
         </div>
-      )}
+      </>)}
 
       {/* Revenue Report */}
-      {activeReport === 'revenue' && !loading && data.seats && (
-        <div className="card p-4">
+      {activeReport === 'revenue' && !loading && data.seats && (<>
+        <div className="mb-3"><ReportExportBar printRef={revenueReportRef} pdfFilename={'تقرير_الإيرادات_'+activeYear?.name} onPrint={()=>window.print()} onExcelExport={()=>{
+          const seatRows = data.seats.map(s=>[s.receipt_number, s.students?.full_name, s.amount, s.receipt_date, 'حجز مقعد']);
+          const payRows = data.payments.map(p=>[p.payments?.receipt_number, p.registrations?.students?.full_name, p.institute_share, p.payments?.receipt_date, 'قسط']);
+          exportToExcel([...seatRows, ...payRows], ['رقم الوصل','الطالب','المبلغ','التاريخ','النوع'], 'تقرير_الإيرادات_'+activeYear?.name);
+        }}/></div>
+        <div className="card p-4 print-receipt" ref={revenueReportRef}>
           <div className="p-3 mb-4 bg-green-50 rounded-lg flex justify-between">
             <span>إجمالي حجوزات المقاعد: <b className="text-green-600">{formatMoney(data.seats.reduce((s,r)=>s+r.amount,0))} د.ع</b></span>
             <span>إجمالي حصة المعهد من الأقساط: <b className="text-green-600">{formatMoney(data.payments.reduce((s,r)=>s+r.institute_share,0))} د.ع</b></span>
@@ -2305,11 +2392,15 @@ function ReportsPage() {
             <tbody>{data.seats.map(s=><tr key={s.id}><td>{s.receipt_number}</td><td>{s.students?.full_name}</td><td>{formatMoney(s.amount)} د.ع</td><td>{formatDate(s.receipt_date)}</td></tr>)}</tbody>
           </table>
         </div>
-      )}
+      </>)}
 
       {/* Expense Report */}
-      {activeReport === 'expenses' && !loading && Array.isArray(data) && (
-        <div className="card p-4">
+      {activeReport === 'expenses' && !loading && Array.isArray(data) && (<>
+        <div className="mb-3"><ReportExportBar printRef={expReportRef} pdfFilename={'تقرير_المصروفات_'+activeYear?.name} onPrint={()=>window.print()} onExcelExport={()=>{
+          const rows = data.map(e=>[e.voucher_number, e.expense_categories?.name, e.amount, e.recipient||'', e.expense_date]);
+          exportToExcel(rows, ['رقم الوصل','الصنف','المبلغ','المستلم','التاريخ'], 'تقرير_المصروفات_'+activeYear?.name);
+        }}/></div>
+        <div className="card p-4 print-receipt" ref={expReportRef}>
           <div className="p-3 mb-4 bg-red-50 rounded-lg">
             <span>إجمالي المصروفات: <b className="text-red-600">{formatMoney(data.reduce((s,e)=>s+e.amount,0))} د.ع</b></span>
           </div>
@@ -2317,7 +2408,7 @@ function ReportsPage() {
             <tbody>{data.map(e=><tr key={e.id}><td>{e.voucher_number}</td><td>{e.expense_categories?.name}</td><td>{formatMoney(e.amount)} د.ع</td><td>{e.recipient||'-'}</td><td>{formatDate(e.expense_date)}</td></tr>)}</tbody>
           </table>
         </div>
-      )}
+      </>)}
     </div>
   );
 }
