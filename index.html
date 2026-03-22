@@ -390,6 +390,20 @@ function SearchInput({ value, onChange, placeholder }) {
   );
 }
 
+const ITEMS_PER_PAGE = 20;
+function Pagination({ total, page, setPage }) {
+  const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
+  if(totalPages <= 1) return null;
+  return (
+    <div className="flex justify-center items-center gap-2 mt-4 py-3">
+      <button className="px-3 py-1 rounded border text-sm" disabled={page===1} onClick={()=>setPage(page-1)} style={{opacity:page===1?0.4:1}}>السابق</button>
+      <span className="text-sm text-gray-600">صفحة {page} من {totalPages} ({total} سجل)</span>
+      <button className="px-3 py-1 rounded border text-sm" disabled={page===totalPages} onClick={()=>setPage(page+1)} style={{opacity:page===totalPages?0.4:1}}>التالي</button>
+    </div>
+  );
+}
+function paginate(arr, page) { return arr.slice((page-1)*ITEMS_PER_PAGE, page*ITEMS_PER_PAGE); }
+
 function PageHeader({ title, action, actionLabel, actionIcon }) {
   return (
     <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
@@ -655,6 +669,7 @@ function StudentsPage() {
   const [delWarning, setDelWarning] = useState(null);
   const [delStep, setDelStep] = useState(0);
   const [form, setForm] = useState({ full_name:'', grade_level_id:'', student_phone:'', parent_phone:'' });
+  const [page, setPage] = useState(1);
   // Registration modal
   const [showRegModal, setShowRegModal] = useState(false);
   const [regStudent, setRegStudent] = useState(null);
@@ -680,14 +695,17 @@ function StudentsPage() {
     setLoading(false);
   };
 
+  const validatePhone = (phone) => !phone || /^07[3-9]\d{8}$/.test(phone);
   const handleSave = async () => {
-    if(!form.full_name) { showToast('يرجى إدخال اسم الطالب', 'error'); return; }
+    if(!form.full_name?.trim()) { showToast('يرجى إدخال اسم الطالب', 'error'); return; }
+    if(form.student_phone && !validatePhone(form.student_phone)) { showToast('رقم هاتف الطالب غير صحيح (يجب أن يبدأ بـ 07 ويتكون من 11 رقم)', 'error'); return; }
+    if(form.parent_phone && !validatePhone(form.parent_phone)) { showToast('رقم هاتف ولي الأمر غير صحيح', 'error'); return; }
     if(editing) {
-      const { error } = await supabase.from('students').update({...form, updated_at: new Date().toISOString()}).eq('id', editing.id);
+      const { error } = await supabase.from('students').update({...form, full_name: form.full_name.trim(), updated_at: new Date().toISOString()}).eq('id', editing.id);
       if(error) { showToast('خطأ في التحديث', 'error'); return; }
       showToast('تم تحديث بيانات الطالب');
     } else {
-      const { error } = await supabase.from('students').insert({...form, academic_year_id: activeYear.id});
+      const { error } = await supabase.from('students').insert({...form, full_name: form.full_name.trim(), academic_year_id: activeYear.id});
       if(error) { showToast('خطأ في الإضافة', 'error'); return; }
       showToast('تم إضافة الطالب بنجاح');
     }
@@ -744,8 +762,12 @@ function StudentsPage() {
 
   const addRegistration = async () => {
     if(!regForm.subject_id || !regForm.teacher_id || !regForm.total_tuition) { showToast('يرجى ملء جميع الحقول', 'error'); return; }
-    const teacher = teachers.find(t=>t.id===regForm.teacher_id);
     const total = parseInt(regForm.total_tuition);
+    if(!total || total <= 0 || isNaN(total)) { showToast('يرجى إدخال مبلغ صحيح أكبر من صفر', 'error'); return; }
+    // Check duplicate registration
+    const existingReg = registrations.find(r => r.subject_id === regForm.subject_id && r.teacher_id === regForm.teacher_id);
+    if(existingReg) { showToast('هذا الطالب مسجل بالفعل في هذه المادة مع نفس الأستاذ', 'error'); return; }
+    const teacher = teachers.find(t=>t.id===regForm.teacher_id);
     let instShare = teacher.commission_type==='percentage' ? Math.round(total * teacher.commission_value / 100) : teacher.commission_value;
     let teacherShare = total - instShare;
     const { error } = await supabase.from('registrations').insert({
@@ -760,6 +782,7 @@ function StudentsPage() {
   };
 
   const filtered = students.filter(s => s.full_name.includes(search) || (s.student_phone||'').includes(search));
+  useEffect(() => { setPage(1); }, [search]);
 
   if(loading) return <Loading/>;
 
@@ -773,9 +796,9 @@ function StudentsPage() {
         <table>
           <thead><tr><th>#</th><th>الاسم</th><th>المرحلة</th><th>هاتف الطالب</th><th>هاتف ولي الأمر</th><th>تاريخ التسجيل</th><th>إجراءات</th></tr></thead>
           <tbody>
-            {filtered.map((s, i) => (
+            {paginate(filtered, page).map((s, i) => (
               <tr key={s.id}>
-                <td>{i+1}</td>
+                <td>{(page-1)*ITEMS_PER_PAGE + i+1}</td>
                 <td className="font-medium">{s.full_name}</td>
                 <td>{s.grade_levels?.name || '-'}</td>
                 <td>{s.student_phone || '-'}</td>
@@ -793,6 +816,7 @@ function StudentsPage() {
             {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا يوجد طلاب</td></tr>}
           </tbody>
         </table>
+        <Pagination total={filtered.length} page={page} setPage={setPage}/>
       </div>
       {/* Add/Edit Modal */}
       <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title={editing?'تعديل بيانات الطالب':'إضافة طالب جديد'}>
@@ -913,8 +937,12 @@ function TeachersPage() {
   };
 
   const handleSave = async () => {
-    if(!form.full_name || !form.commission_value) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
-    const payload = { full_name: form.full_name, phone: form.phone, commission_type: form.commission_type, commission_value: parseInt(form.commission_value) };
+    if(!form.full_name?.trim()) { showToast('يرجى إدخال اسم الأستاذ', 'error'); return; }
+    const commVal = parseInt(form.commission_value);
+    if(!commVal || commVal <= 0 || isNaN(commVal)) { showToast('يرجى إدخال قيمة عمولة صحيحة أكبر من صفر', 'error'); return; }
+    if(form.commission_type === 'percentage' && commVal > 100) { showToast('نسبة العمولة لا يمكن أن تتجاوز 100%', 'error'); return; }
+    if(form.phone && !/^07[3-9]\d{8}$/.test(form.phone)) { showToast('رقم الهاتف غير صحيح (يجب أن يبدأ بـ 07 ويتكون من 11 رقم)', 'error'); return; }
+    const payload = { full_name: form.full_name.trim(), phone: form.phone, commission_type: form.commission_type, commission_value: commVal };
     if(editing) {
       await supabase.from('teachers').update({...payload, updated_at: new Date().toISOString()}).eq('id', editing.id);
       await supabase.from('teacher_subjects').delete().eq('teacher_id', editing.id);
@@ -1025,8 +1053,10 @@ function ReservationsPage() {
   const [printData, setPrintData] = useState(null);
   const [editing, setEditing] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => { loadData(); }, [activeYear]);
+  useEffect(() => { setPage(1); }, [search]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1087,19 +1117,19 @@ function ReservationsPage() {
 
   const handleSave = async () => {
     if(!form.student_id) { showToast('يرجى اختيار الطالب', 'error'); return; }
+    const hasInvalid = form.items.some(i => i.amount && (isNaN(parseInt(i.amount)) || parseInt(i.amount) < 0));
+    if(hasInvalid) { showToast('يوجد مبلغ غير صحيح في أحد المواد', 'error'); return; }
     const validItems = form.items.filter(i => parseInt(i.amount) > 0);
     if(validItems.length === 0) { showToast('يرجى إضافة مادة واحدة على الأقل مع المبلغ', 'error'); return; }
     const total = validItems.reduce((s,i) => s + parseInt(i.amount), 0);
+    if(total <= 0 || isNaN(total)) { showToast('المبلغ الإجمالي غير صحيح', 'error'); return; }
 
     if(editing) {
-      const { error } = await supabase.from('seat_reservations').update({ amount: total, notes: form.notes, receipt_date: form.receipt_date, updated_at: new Date().toISOString() }).eq('id', editing.id);
-      if(error) { showToast('خطأ في التحديث', 'error'); return; }
-      // Re-insert items
-      await supabase.from('seat_reservation_items').delete().eq('reservation_id', editing.id);
-      await supabase.from('seat_reservation_items').insert(validItems.map(i=>({
-        reservation_id: editing.id, registration_id: i.registration_id||null,
-        subject_name: i.subject_name, teacher_name: i.teacher_name, amount: parseInt(i.amount)
-      })));
+      const { error } = await supabase.rpc('update_reservation_items', {
+        p_reservation_id: editing.id, p_total_amount: total, p_notes: form.notes || '', p_receipt_date: form.receipt_date,
+        p_items: validItems.map(i=>({ registration_id: i.registration_id||null, subject_name: i.subject_name, teacher_name: i.teacher_name, amount: parseInt(i.amount) }))
+      });
+      if(error) { showToast('خطأ في التحديث: ' + (error.message||''), 'error'); return; }
       showToast('تم تحديث وصل الحجز'); setShowModal(false); setEditing(null); loadData(); return;
     }
 
@@ -1143,7 +1173,7 @@ function ReservationsPage() {
         <table>
           <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المواد</th><th>المبلغ</th><th>ملاحظات</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
           <tbody>
-            {filtered.map(r => (
+            {paginate(filtered, page).map(r => (
               <tr key={r.id}>
                 <td className="font-mono text-sm">{r.receipt_number}</td>
                 <td>{r.students?.full_name}</td>
@@ -1158,6 +1188,7 @@ function ReservationsPage() {
             {filtered.length===0 && <tr><td colSpan="8" className="text-center py-8 text-gray-400">لا توجد حجوزات</td></tr>}
           </tbody>
         </table>
+        <Pagination total={filtered.length} page={page} setPage={setPage}/>
       </div>
       <Modal isOpen={showModal} onClose={()=>{setShowModal(false);setEditing(null)}} title={editing ? 'تعديل وصل الحجز' : 'وصل حجز مقعد جديد'} wide>
         <div className="space-y-4">
@@ -1227,8 +1258,10 @@ function PaymentsPage() {
   const [printData, setPrintData] = useState(null);
   const [editing, setEditing] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => { loadData(); }, [activeYear]);
+  useEffect(() => { setPage(1); }, [search]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1276,6 +1309,7 @@ function PaymentsPage() {
     if(studentRegs.length === 0) { showToast('الطالب غير مسجل في أي مادة', 'error'); return; }
 
     const total = parseInt(form.total_amount);
+    if(!total || total <= 0 || isNaN(total)) { showToast('يرجى إدخال مبلغ صحيح أكبر من صفر', 'error'); return; }
     let allocs = [];
 
     // Validate manual distribution doesn't exceed total
@@ -1313,15 +1347,11 @@ function PaymentsPage() {
     }
 
     if(editing) {
-      const { error } = await supabase.from('payments').update({
-        student_id: form.student_id, total_amount: total, allocation_type: form.allocation_type, receipt_date: form.receipt_date
-      }).eq('id', editing.id);
-      if(error) { showToast('خطأ في التحديث', 'error'); return; }
-      // Delete old allocations and re-insert
-      await supabase.from('payment_allocations').delete().eq('payment_id', editing.id);
-      if(allocs.length > 0) {
-        await supabase.from('payment_allocations').insert(allocs.map(a=>({...a, payment_id: editing.id})));
-      }
+      const { error } = await supabase.rpc('update_payment_allocations', {
+        p_payment_id: editing.id, p_total_amount: total, p_allocation_type: form.allocation_type, p_receipt_date: form.receipt_date,
+        p_allocations: allocs.map(a=>({ registration_id: a.registration_id, amount: a.amount, institute_amount: a.institute_amount, teacher_amount: a.teacher_amount }))
+      });
+      if(error) { showToast('خطأ في التحديث: ' + (error.message||''), 'error'); return; }
       showToast('تم تحديث وصل الدفع بنجاح');
     } else {
       const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'PAY' });
@@ -1356,7 +1386,7 @@ function PaymentsPage() {
         <table>
           <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المبلغ</th><th>نوع التوزيع</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
           <tbody>
-            {filtered.map(p => (
+            {paginate(filtered, page).map(p => (
               <tr key={p.id}>
                 <td className="font-mono text-sm">{p.receipt_number}</td>
                 <td>{p.students?.full_name}</td>
@@ -1370,6 +1400,7 @@ function PaymentsPage() {
             {filtered.length===0 && <tr><td colSpan="7" className="text-center py-8 text-gray-400">لا توجد دفعات</td></tr>}
           </tbody>
         </table>
+        <Pagination total={filtered.length} page={page} setPage={setPage}/>
       </div>
       <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title={editing ? "تعديل وصل تسديد" : "وصل تسديد قسط جديد"} wide>
         <div className="space-y-4">
@@ -1450,8 +1481,10 @@ function PayoutsPage() {
   const [editing, setEditing] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
   const [printData, setPrintData] = useState(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => { loadData(); }, [activeYear]);
+  useEffect(() => { setPage(1); }, [search]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1497,6 +1530,7 @@ function PayoutsPage() {
   const handleSave = async () => {
     if(!form.teacher_id || !form.amount) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
     const amt = parseInt(form.amount);
+    if(!amt || amt <= 0 || isNaN(amt)) { showToast('يرجى إدخال مبلغ صحيح أكبر من صفر', 'error'); return; }
 
     if(editing) {
       const { error } = await supabase.from('teacher_payouts').update({
@@ -1532,7 +1566,7 @@ function PayoutsPage() {
         <table>
           <thead><tr><th>رقم الوصل</th><th>الأستاذ</th><th>المبلغ</th><th>الرصيد قبل</th><th>الرصيد بعد</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
           <tbody>
-            {filtered.map(p => (
+            {paginate(filtered, page).map(p => (
               <tr key={p.id}>
                 <td className="font-mono text-sm">{p.voucher_number}</td>
                 <td>{p.teachers?.full_name}</td>
@@ -1547,6 +1581,7 @@ function PayoutsPage() {
             {filtered.length===0 && <tr><td colSpan="8" className="text-center py-8 text-gray-400">لا توجد صرفيات</td></tr>}
           </tbody>
         </table>
+        <Pagination total={filtered.length} page={page} setPage={setPage}/>
       </div>
       <Modal isOpen={showModal} onClose={()=>setShowModal(false)} title={editing ? "تعديل وصل صرف أستاذ" : "وصل صرف أستاذ جديد"}>
         <div className="space-y-4">
@@ -1588,9 +1623,11 @@ function ExpensesPage() {
   const [editing, setEditing] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
   const [printData, setPrintData] = useState(null);
+  const [page, setPage] = useState(1);
   const [form, setForm] = useState({ category_id:'', amount:'', recipient:'', description:'', expense_date: todayStr() });
 
   useEffect(() => { loadData(); }, [activeYear]);
+  useEffect(() => { setPage(1); }, [search, filterCat]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1622,6 +1659,8 @@ function ExpensesPage() {
 
   const handleSave = async () => {
     if(!form.category_id || !form.amount) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
+    const expAmt = parseInt(form.amount);
+    if(!expAmt || expAmt <= 0 || isNaN(expAmt)) { showToast('يرجى إدخال مبلغ صحيح أكبر من صفر', 'error'); return; }
     if(editing) {
       const { error } = await supabase.from('expenses').update({
         category_id: form.category_id, amount: parseInt(form.amount), recipient: form.recipient,
@@ -1670,7 +1709,7 @@ function ExpensesPage() {
         <table>
           <thead><tr><th>رقم الوصل</th><th>الصنف</th><th>المبلغ</th><th>المستلم</th><th>الوصف</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
           <tbody>
-            {filtered.map(e => (
+            {paginate(filtered, page).map(e => (
               <tr key={e.id}>
                 <td className="font-mono text-sm">{e.voucher_number}</td>
                 <td><span className="badge bg-red-50 text-red-700">{e.expense_categories?.name}</span></td>
@@ -1685,6 +1724,7 @@ function ExpensesPage() {
             {filtered.length===0 && <tr><td colSpan="8" className="text-center py-8 text-gray-400">لا توجد مصروفات</td></tr>}
           </tbody>
         </table>
+        <Pagination total={filtered.length} page={page} setPage={setPage}/>
       </div>
       <Modal isOpen={showModal} onClose={()=>{setShowModal(false);setEditing(null)}} title={editing ? 'تعديل وصل المصروف' : 'وصل مصروف جديد'}>
         <div className="space-y-4">
@@ -2281,8 +2321,11 @@ function UserMgmtPage() {
   };
 
   const handleSave = async () => {
-    if(!form.username || !form.full_name) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
+    if(!form.username?.trim() || !form.full_name?.trim()) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
+    if(form.username.trim().length < 3) { showToast('اسم المستخدم يجب أن يكون 3 أحرف على الأقل', 'error'); return; }
+    if(!/^[a-zA-Z0-9_]+$/.test(form.username.trim())) { showToast('اسم المستخدم يجب أن يحتوي على أحرف إنجليزية وأرقام فقط', 'error'); return; }
     if(!editing && !form.password) { showToast('يرجى إدخال كلمة المرور', 'error'); return; }
+    if(form.password && form.password.length < 4) { showToast('كلمة المرور يجب أن تكون 4 أحرف على الأقل', 'error'); return; }
 
     if(editing) {
       const updates = { username: form.username, full_name: form.full_name, role: form.role };
@@ -2553,22 +2596,46 @@ function App() {
   const [activeYear, setActiveYear] = useState(null);
   const [loadingApp, setLoadingApp] = useState(false);
 
+  const SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
+
   useEffect(() => {
     // Check stored session
     try {
       const stored = localStorage.getItem('kaizen_user');
       if(stored) {
         const parsed = JSON.parse(stored);
+        const lastActivity = localStorage.getItem('kaizen_last_activity');
         if(parsed && parsed.user_id && parsed.role) {
-          setUser(parsed);
+          if(lastActivity && (Date.now() - parseInt(lastActivity)) > SESSION_TIMEOUT) {
+            localStorage.removeItem('kaizen_user');
+            localStorage.removeItem('kaizen_last_activity');
+          } else {
+            setUser(parsed);
+            localStorage.setItem('kaizen_last_activity', String(Date.now()));
+          }
         } else {
           localStorage.removeItem('kaizen_user');
         }
       }
     } catch(e) {
       localStorage.removeItem('kaizen_user');
+      localStorage.removeItem('kaizen_last_activity');
     }
   }, []);
+
+  // Track activity to refresh session
+  useEffect(() => {
+    if(!user) return;
+    const updateActivity = () => localStorage.setItem('kaizen_last_activity', String(Date.now()));
+    const events = ['click', 'keydown', 'scroll'];
+    events.forEach(e => window.addEventListener(e, updateActivity, { passive: true }));
+    // Check timeout every 5 minutes
+    const interval = setInterval(() => {
+      const last = parseInt(localStorage.getItem('kaizen_last_activity') || '0');
+      if(Date.now() - last > SESSION_TIMEOUT) { handleLogout(); }
+    }, 5 * 60 * 1000);
+    return () => { events.forEach(e => window.removeEventListener(e, updateActivity)); clearInterval(interval); };
+  }, [user]);
 
   useEffect(() => {
     if(user) loadYears();
@@ -2586,11 +2653,13 @@ function App() {
   const handleLogin = (u) => {
     setUser(u);
     localStorage.setItem('kaizen_user', JSON.stringify(u));
+    localStorage.setItem('kaizen_last_activity', String(Date.now()));
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('kaizen_user');
+    localStorage.removeItem('kaizen_last_activity');
     setActivePage('dashboard');
   };
 
