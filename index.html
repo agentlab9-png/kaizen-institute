@@ -999,16 +999,18 @@ function ReservationsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ student_id:'', registration_id:'', amount:'', receipt_date: todayStr() });
+  const [form, setForm] = useState({ student_id:'', items:[], notes:'', receipt_date: todayStr() });
   const [studentRegs, setStudentRegs] = useState([]);
   const [printData, setPrintData] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
 
   useEffect(() => { loadData(); }, [activeYear]);
 
   const loadData = async () => {
     setLoading(true);
     const [rRes, sRes] = await Promise.all([
-      supabase.from('seat_reservations').select('*,students(full_name,grade_levels(name)),registrations(subjects(name_ar),teachers(full_name)),creator:profiles!created_by(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
+      supabase.from('seat_reservations').select('*,students(full_name,grade_levels(name)),seat_reservation_items(*),creator:profiles!created_by(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
       supabase.from('students').select('*').eq('academic_year_id', activeYear?.id).eq('is_active', true)
     ]);
     setReservations(rRes.data || []);
@@ -1017,17 +1019,45 @@ function ReservationsPage() {
   };
 
   const onStudentSelect = async (sid) => {
-    setForm(f=>({...f, student_id: sid, registration_id:''}));
+    setForm(f=>({...f, student_id: sid, items:[]}));
     if(sid) {
       const { data } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name)').eq('student_id', sid).eq('is_active', true);
       setStudentRegs(data || []);
     } else setStudentRegs([]);
   };
 
-  const [editing, setEditing] = useState(null);
-  const [confirmDel, setConfirmDel] = useState(null);
-  const openEdit = (r) => { setEditing(r); setForm({ student_id: r.student_id, registration_id: r.registration_id||'', amount: r.amount+'', receipt_date: r.receipt_date||todayStr() }); setShowModal(true); };
-  const openAdd = () => { setEditing(null); setForm({student_id:'',registration_id:'',amount:'',receipt_date:todayStr()}); setStudentRegs([]); setShowModal(true); };
+  const toggleSubjectItem = (reg) => {
+    setForm(f => {
+      const exists = f.items.find(i => i.registration_id === reg.id);
+      if(exists) return {...f, items: f.items.filter(i => i.registration_id !== reg.id)};
+      return {...f, items: [...f.items, { registration_id: reg.id, subject_name: reg.subjects?.name_ar||'', teacher_name: reg.teachers?.full_name||'', amount: '' }]};
+    });
+  };
+
+  const updateItemAmount = (regId, amount) => {
+    setForm(f => ({...f, items: f.items.map(i => i.registration_id === regId ? {...i, amount} : i)}));
+  };
+
+  const totalAmount = form.items.reduce((s,i) => s + (parseInt(i.amount)||0), 0);
+
+  const openAdd = () => { setEditing(null); setForm({student_id:'', items:[], notes:'', receipt_date:todayStr()}); setStudentRegs([]); setShowModal(true); };
+
+  const openEdit = async (r) => {
+    setEditing(r);
+    const items = (r.seat_reservation_items||[]).map(it => ({
+      registration_id: it.registration_id||'', subject_name: it.subject_name||'', teacher_name: it.teacher_name||'', amount: String(it.amount||'')
+    }));
+    // If old format (no items), create one item from parent
+    if(items.length === 0 && r.amount) {
+      items.push({ registration_id: r.registration_id||'', subject_name: '', teacher_name: '', amount: String(r.amount) });
+    }
+    setForm({ student_id: r.student_id, items, notes: r.notes||'', receipt_date: r.receipt_date||todayStr() });
+    if(r.student_id) {
+      const { data } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name)').eq('student_id', r.student_id).eq('is_active', true);
+      setStudentRegs(data || []);
+    }
+    setShowModal(true);
+  };
 
   const handleDelete = async () => {
     await supabase.from('seat_reservations').update({ is_deleted: true }).eq('id', confirmDel);
@@ -1035,23 +1065,49 @@ function ReservationsPage() {
   };
 
   const handleSave = async () => {
-    if(!form.student_id || !form.amount) { showToast('يرجى ملء الحقول المطلوبة', 'error'); return; }
+    if(!form.student_id) { showToast('يرجى اختيار الطالب', 'error'); return; }
+    const validItems = form.items.filter(i => parseInt(i.amount) > 0);
+    if(validItems.length === 0) { showToast('يرجى إضافة مادة واحدة على الأقل مع المبلغ', 'error'); return; }
+    const total = validItems.reduce((s,i) => s + parseInt(i.amount), 0);
+
     if(editing) {
-      const { error } = await supabase.from('seat_reservations').update({ amount: parseInt(form.amount), receipt_date: form.receipt_date, updated_at: new Date().toISOString() }).eq('id', editing.id);
+      const { error } = await supabase.from('seat_reservations').update({ amount: total, notes: form.notes, receipt_date: form.receipt_date, updated_at: new Date().toISOString() }).eq('id', editing.id);
       if(error) { showToast('خطأ في التحديث', 'error'); return; }
+      // Re-insert items
+      await supabase.from('seat_reservation_items').delete().eq('reservation_id', editing.id);
+      await supabase.from('seat_reservation_items').insert(validItems.map(i=>({
+        reservation_id: editing.id, registration_id: i.registration_id||null,
+        subject_name: i.subject_name, teacher_name: i.teacher_name, amount: parseInt(i.amount)
+      })));
       showToast('تم تحديث وصل الحجز'); setShowModal(false); setEditing(null); loadData(); return;
     }
+
     const { data: rcpt } = await supabase.rpc('generate_receipt_number', { p_year_id: activeYear.id, p_type: 'RES' });
     const receiptNum = Array.isArray(rcpt) ? rcpt[0] : rcpt;
     const { data, error } = await supabase.from('seat_reservations').insert({
-      receipt_number: receiptNum, student_id: form.student_id, registration_id: form.registration_id || null,
-      academic_year_id: activeYear.id, amount: parseInt(form.amount), receipt_date: form.receipt_date, created_by: user.user_id
-    }).select('*,students(full_name,grade_levels(name)),registrations(subjects(name_ar),teachers(full_name))').single();
+      receipt_number: receiptNum, student_id: form.student_id,
+      academic_year_id: activeYear.id, amount: total, notes: form.notes, receipt_date: form.receipt_date, created_by: user.user_id
+    }).select('*,students(full_name,grade_levels(name)),seat_reservation_items(*),creator:profiles!created_by(full_name)').single();
     if(error) { showToast('خطأ في الحفظ: ' + (error.message||''), 'error'); return; }
+
+    // Insert items
+    if(data) {
+      await supabase.from('seat_reservation_items').insert(validItems.map(i=>({
+        reservation_id: data.id, registration_id: i.registration_id||null,
+        subject_name: i.subject_name, teacher_name: i.teacher_name, amount: parseInt(i.amount)
+      })));
+    }
     showToast('تم إنشاء وصل الحجز بنجاح');
     setShowModal(false);
     loadData();
-    if(data) setPrintData(data);
+    if(data) setPrintData({...data, seat_reservation_items: validItems.map(i=>({...i, amount: parseInt(i.amount)}))});
+  };
+
+  const getSubjectsText = (r) => {
+    const items = r.seat_reservation_items || [];
+    if(items.length > 0) return items.map(i => i.subject_name || '-').join('، ');
+    if(r.registrations?.subjects?.name_ar) return r.registrations.subjects.name_ar;
+    return '-';
   };
 
   const filtered = reservations.filter(r => r.students?.full_name?.includes(search) || r.receipt_number?.includes(search));
@@ -1064,15 +1120,15 @@ function ReservationsPage() {
       <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch} placeholder="بحث بالاسم أو رقم الوصل..."/></div>
       <div className="card table-container">
         <table>
-          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المادة</th><th>الأستاذ</th><th>المبلغ</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المواد</th><th>المبلغ</th><th>ملاحظات</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
           <tbody>
             {filtered.map(r => (
               <tr key={r.id}>
                 <td className="font-mono text-sm">{r.receipt_number}</td>
                 <td>{r.students?.full_name}</td>
-                <td>{r.registrations?.subjects?.name_ar || '-'}</td>
-                <td>{r.registrations?.teachers?.full_name || '-'}</td>
+                <td className="text-sm">{getSubjectsText(r)}</td>
                 <td className="font-bold text-accent-600">{formatMoney(r.amount)} د.ع</td>
+                <td className="text-xs text-gray-500">{r.notes || '-'}</td>
                 <td>{formatDate(r.receipt_date)}</td>
                 <td className="text-xs text-gray-500">{r.creator?.full_name || '-'}</td>
                 <td><div className="flex gap-2">{hasPerm('reservations.edit') && <button onClick={()=>openEdit(r)} className="text-blue-600">{Icons.edit}</button>}{hasPerm('reservations.delete') && <button onClick={()=>setConfirmDel(r.id)} className="text-red-500">{Icons.trash}</button>}<button onClick={()=>setPrintData(r)} className="text-primary-600">{Icons.print}</button></div></td>
@@ -1082,22 +1138,50 @@ function ReservationsPage() {
           </tbody>
         </table>
       </div>
-      <Modal isOpen={showModal} onClose={()=>{setShowModal(false);setEditing(null)}} title={editing ? 'تعديل وصل الحجز' : 'وصل حجز مقعد جديد'}>
+      <Modal isOpen={showModal} onClose={()=>{setShowModal(false);setEditing(null)}} title={editing ? 'تعديل وصل الحجز' : 'وصل حجز مقعد جديد'} wide>
         <div className="space-y-4">
           <div><label className="block text-sm font-medium mb-1">الطالب *</label>
             <SearchableSelect options={students.map(s=>({value:s.id, label:s.full_name}))} value={form.student_id} onChange={v=>onStudentSelect(v)} placeholder="ابحث عن الطالب..."/>
           </div>
-          {studentRegs.length > 0 && <div><label className="block text-sm font-medium mb-1">المادة (اختياري)</label>
-            <SearchableSelect options={studentRegs.map(r=>({value:r.id, label:(r.subjects?.name_ar||'')+' - '+(r.teachers?.full_name||'')}))} value={form.registration_id} onChange={v=>setForm({...form,registration_id:v})} placeholder="اختر المادة..."/>
+          {studentRegs.length > 0 && <div>
+            <label className="block text-sm font-medium mb-2">اختر المواد (اضغط على المادة لإضافتها)</label>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {studentRegs.map(reg => {
+                const selected = form.items.find(i => i.registration_id === reg.id);
+                return (
+                  <button key={reg.id} type="button" onClick={()=>toggleSubjectItem(reg)}
+                    className={`px-3 py-2 rounded-lg text-sm border-2 transition ${selected ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-300 hover:border-primary-400'}`}>
+                    {reg.subjects?.name_ar} - {reg.teachers?.full_name}
+                  </button>
+                );
+              })}
+            </div>
+            {form.items.length > 0 && <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+              <p className="text-sm font-medium text-gray-700 mb-1">المبالغ لكل مادة:</p>
+              {form.items.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-3">
+                  <span className="text-sm flex-1">{item.subject_name} - {item.teacher_name}</span>
+                  <input className="input-field w-36" type="number" placeholder="المبلغ" value={item.amount}
+                    onChange={e=>updateItemAmount(item.registration_id, e.target.value)}/>
+                  <span className="text-xs text-gray-400">د.ع</span>
+                </div>
+              ))}
+              <div className="flex justify-between pt-2 border-t mt-2">
+                <span className="font-bold text-sm">المجموع الكلي:</span>
+                <span className="font-bold text-primary-700">{formatMoney(totalAmount)} د.ع</span>
+              </div>
+            </div>}
           </div>}
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-sm font-medium mb-1">المبلغ (د.ع) *</label><input className="input-field" type="number" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})}/></div>
-            <div><label className="block text-sm font-medium mb-1">التاريخ</label><input className="input-field" type="date" value={form.receipt_date} onChange={e=>setForm({...form,receipt_date:e.target.value})}/></div>
-          </div>
+          {studentRegs.length === 0 && form.student_id && <div className="bg-yellow-50 p-3 rounded-lg text-sm text-yellow-700 text-center">هذا الطالب غير مسجل بأي مادة. يمكنك إضافة مبلغ يدوي أدناه.</div>}
+          {(studentRegs.length === 0 && form.student_id) && <div>
+            <label className="block text-sm font-medium mb-1">المبلغ (د.ع) *</label>
+            <input className="input-field" type="number" value={form.items[0]?.amount||''} onChange={e=>setForm({...form, items:[{registration_id:'', subject_name:'حجز عام', teacher_name:'', amount:e.target.value}]})}/>
+          </div>}
+          <div><label className="block text-sm font-medium mb-1">التاريخ</label><input className="input-field" type="date" value={form.receipt_date} onChange={e=>setForm({...form,receipt_date:e.target.value})}/></div>
+          <div><label className="block text-sm font-medium mb-1">ملاحظات</label><input className="input-field" value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="أي ملاحظات إضافية..."/></div>
           <div className="flex gap-3 pt-2"><button className="btn-primary" onClick={handleSave}>{editing ? 'تحديث' : 'إنشاء الوصل'}</button><button className="btn-ghost" onClick={()=>{setShowModal(false);setEditing(null)}}>إلغاء</button></div>
         </div>
       </Modal>
-      {/* Print Receipt */}
       {printData && <ReceiptPrint type="reservation" data={printData} onClose={()=>setPrintData(null)}/>}
       <ConfirmDialog isOpen={!!confirmDel} onConfirm={handleDelete} onCancel={()=>setConfirmDel(null)} message="هل أنت متأكد من مسح هذا الوصل؟"/>
     </div>
@@ -2325,14 +2409,27 @@ function ReceiptPrint({ type, data, onClose }) {
               <span>الطالب: <b>{data.students?.full_name || '-'}</b></span>
               {data.students?.grade_levels?.name && <span>المرحلة: <b>{data.students?.grade_levels?.name}</b></span>}
             </div>
-            {data.registrations?.subjects?.name_ar && <div style={{padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
-              <span>المادة: <b>{data.registrations?.subjects?.name_ar}</b></span>
-              {data.registrations?.teachers?.full_name && <span style={{marginRight:20}}>الأستاذ: <b>{data.registrations?.teachers?.full_name}</b></span>}
-            </div>}
+            {/* Show subjects - multi or single */}
+            {type === 'reservation' && (data.seat_reservation_items||[]).length > 0 ? (
+              <table style={{width:'100%', borderCollapse:'collapse', margin:'8px 0', fontSize:12}}>
+                <thead><tr style={{background:'#f5f5f5'}}><th style={{padding:5, border:'1px solid #ddd'}}>المادة</th><th style={{padding:5, border:'1px solid #ddd'}}>الأستاذ</th><th style={{padding:5, border:'1px solid #ddd'}}>المبلغ</th></tr></thead>
+                <tbody>
+                  {(data.seat_reservation_items||[]).map((it, idx) => (
+                    <tr key={idx}><td style={{padding:5, border:'1px solid #ddd'}}>{it.subject_name || '-'}</td><td style={{padding:5, border:'1px solid #ddd'}}>{it.teacher_name || '-'}</td><td style={{padding:5, border:'1px solid #ddd', fontWeight:'bold'}}>{formatMoney(it.amount)} د.ع</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : data.registrations?.subjects?.name_ar ? (
+              <div style={{padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
+                <span>المادة: <b>{data.registrations?.subjects?.name_ar}</b></span>
+                {data.registrations?.teachers?.full_name && <span style={{marginRight:20}}>الأستاذ: <b>{data.registrations?.teachers?.full_name}</b></span>}
+              </div>
+            ) : null}
             <div style={{background:'#f0f7f0', border:'2px solid #2D8B4E', borderRadius:8, padding:10, textAlign:'center', margin:'10px 0'}}>
               <div style={{fontSize:24, fontWeight:'bold', color:'#2D8B4E'}}>{formatMoney(data.amount || data.total_amount)} د.ع</div>
               <div style={{fontSize:11, color:'#666'}}>فقط {formatMoney(data.amount || data.total_amount)} دينار عراقي لا غير</div>
             </div>
+            {data.notes && <div style={{padding:'5px 0', fontSize:12, color:'#555'}}>ملاحظات: <b>{data.notes}</b></div>}
             {type === 'reservation' && <div style={{background:'#fff3cd', padding:5, textAlign:'center', fontSize:12, color:'#856404', borderRadius:4, fontWeight:'bold'}}>المبلغ غير قابل للاسترجاع</div>}
             <div style={{display:'flex', justifyContent:'space-between', marginTop:25, paddingTop:10, borderTop:'1px solid #ddd'}}>
               <div style={{textAlign:'center', width:'30%'}}><div style={{borderBottom:'1px solid #333', marginTop:30, marginBottom:5}}></div><div style={{fontSize:11, color:'#666'}}>توقيع المستلم</div></div>
