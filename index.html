@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script>
 tailwind.config = {
@@ -212,6 +213,15 @@ const formatDate = (date) => {
 };
 const todayStr = () => new Date().toISOString().split('T')[0];
 
+// Export to Excel utility
+const exportToExcel = (data, headers, filename) => {
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+  ws['!cols'] = headers.map(() => ({ wch: 18 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+  XLSX.writeFile(wb, filename + '.xlsx');
+};
+
 // Permission keys
 const ALL_PERMISSIONS = [
   { group: 'الطلاب', keys: ['students.view','students.add','students.edit','students.delete'] },
@@ -255,6 +265,7 @@ const Icons = {
   plus: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
   edit: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
   trash: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  download: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
   search: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
   print: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
   eye: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
@@ -390,6 +401,20 @@ function SearchInput({ value, onChange, placeholder }) {
       <input className="input-field pr-10" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder || 'بحث...'} />
     </div>
   );
+}
+function DateRangeFilter({ dateFrom, dateTo, setDateFrom, setDateTo }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-sm text-gray-500">من:</span>
+      <input type="date" className="input-field py-1 text-sm w-auto" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/>
+      <span className="text-sm text-gray-500">إلى:</span>
+      <input type="date" className="input-field py-1 text-sm w-auto" value={dateTo} onChange={e=>setDateTo(e.target.value)}/>
+      {(dateFrom||dateTo) && <button onClick={()=>{setDateFrom('');setDateTo('')}} className="text-xs text-red-500 hover:text-red-700">مسح الفلتر</button>}
+    </div>
+  );
+}
+function ExportBtn({ onClick }) {
+  return <button onClick={onClick} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm bg-green-50 text-green-700 hover:bg-green-100 border border-green-200" title="تصدير Excel">{Icons.download} تصدير Excel</button>;
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -766,7 +791,7 @@ function StudentsPage() {
     if(form.student_phone && !validatePhone(form.student_phone)) { showToast('رقم هاتف الطالب غير صحيح (يجب أن يبدأ بـ 07 ويتكون من 11 رقم)', 'error'); return; }
     if(form.parent_phone && !validatePhone(form.parent_phone)) { showToast('رقم هاتف ولي الأمر غير صحيح', 'error'); return; }
     if(editing) {
-      const { error } = await supabase.from('students').update({...form, full_name: form.full_name.trim(), updated_at: new Date().toISOString()}).eq('id', editing.id);
+      const { error } = await supabase.from('students').update({...form, full_name: form.full_name.trim(), updated_by: user.user_id, updated_at: new Date().toISOString()}).eq('id', editing.id);
       if(error) { showToast('خطأ في التحديث', 'error'); return; }
       showToast('تم تحديث بيانات الطالب');
     } else {
@@ -1009,7 +1034,7 @@ function TeachersPage() {
     if(form.phone && !/^07[3-9]\d{8}$/.test(form.phone)) { showToast('رقم الهاتف غير صحيح (يجب أن يبدأ بـ 07 ويتكون من 11 رقم)', 'error'); return; }
     const payload = { full_name: form.full_name.trim(), phone: form.phone, commission_type: form.commission_type, commission_value: commVal };
     if(editing) {
-      await supabase.from('teachers').update({...payload, updated_at: new Date().toISOString()}).eq('id', editing.id);
+      await supabase.from('teachers').update({...payload, updated_by: user.user_id, updated_at: new Date().toISOString()}).eq('id', editing.id);
       await supabase.from('teacher_subjects').delete().eq('teacher_id', editing.id);
       if(form.subject_ids.length) await supabase.from('teacher_subjects').insert(form.subject_ids.map(sid=>({teacher_id:editing.id, subject_id:sid})));
       showToast('تم تحديث بيانات الأستاذ');
@@ -1112,6 +1137,8 @@ function ReservationsPage() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ student_id:'', items:[], notes:'', receipt_date: todayStr() });
   const [studentRegs, setStudentRegs] = useState([]);
@@ -1121,7 +1148,7 @@ function ReservationsPage() {
   const [page, setPage] = useState(1);
 
   useEffect(() => { loadData(); }, [activeYear]);
-  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1191,7 +1218,7 @@ function ReservationsPage() {
 
     if(editing) {
       const { error } = await supabase.rpc('update_reservation_items', {
-        p_reservation_id: editing.id, p_total_amount: total, p_notes: form.notes || '', p_receipt_date: form.receipt_date,
+        p_reservation_id: editing.id, p_total_amount: total, p_notes: form.notes || '', p_receipt_date: form.receipt_date, p_updated_by: user.user_id,
         p_items: validItems.map(i=>({ registration_id: i.registration_id||null, subject_name: i.subject_name, teacher_name: i.teacher_name, amount: parseInt(i.amount) }))
       });
       if(error) { showToast('خطأ في التحديث: ' + (error.message||''), 'error'); return; }
@@ -1226,14 +1253,28 @@ function ReservationsPage() {
     return '-';
   };
 
-  const filtered = reservations.filter(r => r.students?.full_name?.includes(search) || r.receipt_number?.includes(search));
+  const filtered = reservations.filter(r => {
+    const matchSearch = r.students?.full_name?.includes(search) || r.receipt_number?.includes(search);
+    const d = r.receipt_date; const matchFrom = !dateFrom || d >= dateFrom; const matchTo = !dateTo || d <= dateTo;
+    return matchSearch && matchFrom && matchTo;
+  });
+  const handleExport = () => {
+    exportToExcel(filtered.map(r => [r.receipt_number, r.students?.full_name, getSubjectsText(r), r.amount, r.notes||'', r.receipt_date, r.creator?.full_name||'']),
+    ['رقم الوصل','الطالب','المواد','المبلغ','ملاحظات','التاريخ','بواسطة'], 'حجوزات_المقاعد');
+  };
 
   if(loading) return <Loading/>;
 
   return (
     <div className="fade-in">
       <PageHeader title="حجز المقاعد" action={hasPerm('reservations.add') ? openAdd : null} actionLabel="وصل حجز جديد"/>
-      <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch} placeholder="بحث بالاسم أو رقم الوصل..."/></div>
+      <div className="card p-4 mb-4 space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex-1 min-w-[200px]"><SearchInput value={search} onChange={setSearch} placeholder="بحث بالاسم أو رقم الوصل..."/></div>
+          <ExportBtn onClick={handleExport}/>
+        </div>
+        <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} setDateFrom={setDateFrom} setDateTo={setDateTo}/>
+      </div>
       <div className="card table-container">
         <table>
           <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المواد</th><th>المبلغ</th><th>ملاحظات</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
@@ -1324,9 +1365,11 @@ function PaymentsPage() {
   const [editing, setEditing] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
   const [page, setPage] = useState(1);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   useEffect(() => { loadData(); }, [activeYear]);
-  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1415,7 +1458,7 @@ function PaymentsPage() {
 
     if(editing) {
       const { error } = await supabase.rpc('update_payment_allocations', {
-        p_payment_id: editing.id, p_total_amount: total, p_allocation_type: form.allocation_type, p_receipt_date: form.receipt_date,
+        p_payment_id: editing.id, p_total_amount: total, p_allocation_type: form.allocation_type, p_receipt_date: form.receipt_date, p_updated_by: user.user_id,
         p_allocations: allocs.map(a=>({ registration_id: a.registration_id, amount: a.amount, institute_amount: a.institute_share, teacher_amount: a.teacher_share }))
       });
       if(error) { showToast('خطأ في التحديث: ' + (error.message||''), 'error'); return; }
@@ -1441,14 +1484,29 @@ function PaymentsPage() {
     loadData();
   };
 
-  const filtered = payments.filter(p => p.students?.full_name?.includes(search) || p.receipt_number?.includes(search));
+  const filtered = payments.filter(p => {
+    const matchSearch = p.students?.full_name?.includes(search) || p.receipt_number?.includes(search);
+    const d = p.receipt_date; const matchFrom = !dateFrom || d >= dateFrom; const matchTo = !dateTo || d <= dateTo;
+    return matchSearch && matchFrom && matchTo;
+  });
+
+  const handleExport = () => {
+    exportToExcel(filtered.map(p => [p.receipt_number, p.students?.full_name, p.total_amount, p.allocation_type==='equal'?'توزيع متساوي':'توزيع يدوي', p.receipt_date, p.creator?.full_name||'']),
+    ['رقم الوصل','الطالب','المبلغ','نوع التوزيع','التاريخ','بواسطة'], 'دفعات_الطلاب');
+  };
 
   if(loading) return <Loading/>;
 
   return (
     <div className="fade-in">
       <PageHeader title="دفعات الطلاب" action={hasPerm('payments.add') ? openAdd : null} actionLabel="وصل دفع جديد"/>
-      <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch}/></div>
+      <div className="card p-4 mb-4 space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex-1 min-w-[200px]"><SearchInput value={search} onChange={setSearch}/></div>
+          <ExportBtn onClick={handleExport}/>
+        </div>
+        <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} setDateFrom={setDateFrom} setDateTo={setDateTo}/>
+      </div>
       <div className="card table-container">
         <table>
           <thead><tr><th>رقم الوصل</th><th>الطالب</th><th>المبلغ</th><th>نوع التوزيع</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
@@ -1549,9 +1607,11 @@ function PayoutsPage() {
   const [confirmDel, setConfirmDel] = useState(null);
   const [printData, setPrintData] = useState(null);
   const [page, setPage] = useState(1);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   useEffect(() => { loadData(); }, [activeYear]);
-  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1600,8 +1660,15 @@ function PayoutsPage() {
     if(!amt || amt <= 0 || isNaN(amt)) { showToast('يرجى إدخال مبلغ صحيح أكبر من صفر', 'error'); return; }
 
     if(editing) {
+      // Recalculate balance_before/balance_after with current teacher balance
+      const { data: balData } = await supabase.rpc('get_teacher_balance', { p_teacher_id: form.teacher_id, p_year_id: activeYear.id });
+      const currentBal = typeof balData === 'number' ? balData : (Array.isArray(balData) ? balData[0] : 0);
+      // Add back the old payout amount to get the "before" balance, then subtract new amount
+      const balBefore = currentBal + editing.amount;
+      const balAfter = balBefore - amt;
       const { error } = await supabase.from('teacher_payouts').update({
-        teacher_id: form.teacher_id, amount: amt, payout_date: form.payout_date, notes: form.notes
+        teacher_id: form.teacher_id, amount: amt, payout_date: form.payout_date, notes: form.notes,
+        balance_before: balBefore, balance_after: balAfter, updated_by: user.user_id, updated_at: new Date().toISOString()
       }).eq('id', editing.id);
       if(error) { showToast('خطأ في التحديث', 'error'); return; }
       showToast('تم تحديث وصل الصرف بنجاح');
@@ -1621,14 +1688,29 @@ function PayoutsPage() {
     loadData();
   };
 
-  const filtered = payouts.filter(p => p.teachers?.full_name?.includes(search) || p.voucher_number?.includes(search));
+  const filtered = payouts.filter(p => {
+    const matchSearch = p.teachers?.full_name?.includes(search) || p.voucher_number?.includes(search);
+    const d = p.payout_date; const matchFrom = !dateFrom || d >= dateFrom; const matchTo = !dateTo || d <= dateTo;
+    return matchSearch && matchFrom && matchTo;
+  });
+
+  const handleExport = () => {
+    exportToExcel(filtered.map(p => [p.voucher_number, p.teachers?.full_name, p.amount, p.balance_before, p.balance_after, p.payout_date, p.creator?.full_name||'']),
+    ['رقم الوصل','الأستاذ','المبلغ','الرصيد قبل','الرصيد بعد','التاريخ','بواسطة'], 'صرف_الأساتذة');
+  };
 
   if(loading) return <Loading/>;
 
   return (
     <div className="fade-in">
       <PageHeader title="صرف الأساتذة" action={hasPerm('payouts.add') ? openAdd : null} actionLabel="وصل صرف جديد"/>
-      <div className="card p-4 mb-4"><SearchInput value={search} onChange={setSearch}/></div>
+      <div className="card p-4 mb-4 space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex-1 min-w-[200px]"><SearchInput value={search} onChange={setSearch}/></div>
+          <ExportBtn onClick={handleExport}/>
+        </div>
+        <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} setDateFrom={setDateFrom} setDateTo={setDateTo}/>
+      </div>
       <div className="card table-container">
         <table>
           <thead><tr><th>رقم الوصل</th><th>الأستاذ</th><th>المبلغ</th><th>الرصيد قبل</th><th>الرصيد بعد</th><th>التاريخ</th><th>بواسطة</th><th>إجراءات</th></tr></thead>
@@ -1691,10 +1773,12 @@ function ExpensesPage() {
   const [confirmDel, setConfirmDel] = useState(null);
   const [printData, setPrintData] = useState(null);
   const [page, setPage] = useState(1);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [form, setForm] = useState({ category_id:'', amount:'', recipient:'', description:'', expense_date: todayStr() });
 
   useEffect(() => { loadData(); }, [activeYear]);
-  useEffect(() => { setPage(1); }, [search, filterCat]);
+  useEffect(() => { setPage(1); }, [search, filterCat, dateFrom, dateTo]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1731,7 +1815,7 @@ function ExpensesPage() {
     if(editing) {
       const { error } = await supabase.from('expenses').update({
         category_id: form.category_id, amount: parseInt(form.amount), recipient: form.recipient,
-        description: form.description, expense_date: form.expense_date, updated_at: new Date().toISOString()
+        description: form.description, expense_date: form.expense_date, updated_by: user.user_id, updated_at: new Date().toISOString()
       }).eq('id', editing.id);
       if(error) { showToast('خطأ في التحديث', 'error'); return; }
       showToast('تم تحديث وصل المصروف بنجاح');
@@ -1752,8 +1836,14 @@ function ExpensesPage() {
   const filtered = expenses.filter(e => {
     const matchSearch = !search || e.expense_categories?.name?.includes(search) || e.recipient?.includes(search) || e.voucher_number?.includes(search);
     const matchCat = !filterCat || e.category_id === filterCat;
-    return matchSearch && matchCat;
+    const d = e.expense_date; const matchFrom = !dateFrom || d >= dateFrom; const matchTo = !dateTo || d <= dateTo;
+    return matchSearch && matchCat && matchFrom && matchTo;
   });
+
+  const handleExport = () => {
+    exportToExcel(filtered.map(e => [e.voucher_number, e.expense_categories?.name, e.amount, e.recipient||'', e.description||'', e.expense_date, e.creator?.full_name||'']),
+    ['رقم الوصل','الصنف','المبلغ','المستلم','الوصف','التاريخ','بواسطة'], 'المصروفات');
+  };
 
   const totalFiltered = filtered.reduce((s, e) => s + e.amount, 0);
 
@@ -1762,11 +1852,15 @@ function ExpensesPage() {
   return (
     <div className="fade-in">
       <PageHeader title="المصروفات" action={hasPerm('expenses.add') ? openAdd : null} actionLabel="وصل مصروف جديد"/>
-      <div className="card p-4 mb-4 flex flex-wrap gap-3">
-        <div className="flex-1 min-w-[200px]"><SearchInput value={search} onChange={setSearch}/></div>
-        <select className="input-field w-auto" value={filterCat} onChange={e=>setFilterCat(e.target.value)}>
-          <option value="">جميع الأصناف</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+      <div className="card p-4 mb-4 space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex-1 min-w-[200px]"><SearchInput value={search} onChange={setSearch}/></div>
+          <select className="input-field w-auto" value={filterCat} onChange={e=>setFilterCat(e.target.value)}>
+            <option value="">جميع الأصناف</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <ExportBtn onClick={handleExport}/>
+        </div>
+        <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} setDateFrom={setDateFrom} setDateTo={setDateTo}/>
       </div>
       <div className="card p-3 mb-4 flex justify-between items-center bg-red-50">
         <span className="text-gray-700 font-medium">إجمالي المصروفات المعروضة</span>
