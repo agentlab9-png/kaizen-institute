@@ -261,6 +261,8 @@ const Icons = {
   close: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   menu: <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
   chair: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M19 21l-1-6H6l-1 6"/><rect x="4" y="5" width="16" height="10" rx="2"/></svg>,
+  recycle: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M14 11v6"/><path d="M10 11v6"/></svg>,
+  restore: <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>,
 };
 
 // ============================================
@@ -482,7 +484,10 @@ function Sidebar({ activePage, setActivePage, user, onLogout }) {
     { id:'reports', label:'التقارير', icon: Icons.reports, perm:'reports.revenue' },
     { id:'settings', label:'الإعدادات', icon: Icons.settings, perm:'settings.years' },
   ];
-  if(user.role === 'admin') items.push({ id:'usermgmt', label:'إدارة المستخدمين', icon: Icons.users, perm: null });
+  if(user.role === 'admin') {
+    items.push({ id:'trash', label:'المحذوفات', icon: Icons.recycle, perm: null });
+    items.push({ id:'usermgmt', label:'إدارة المستخدمين', icon: Icons.users, perm: null });
+  }
 
   return (
     <>
@@ -740,7 +745,7 @@ function StudentsPage() {
   const handleDelete = async () => {
     const sid = confirmDel || delWarning?.studentId;
     // Deactivate student
-    await supabase.from('students').update({ is_active: false }).eq('id', sid);
+    await supabase.from('students').update({ is_active: false, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', sid);
     // Deactivate registrations and zero out
     await supabase.from('registrations').update({ is_active: false, total_tuition: 0, total_paid: 0, updated_at: new Date().toISOString() }).eq('student_id', sid);
     setConfirmDel(null); setDelWarning(null); setDelStep(0);
@@ -1111,7 +1116,7 @@ function ReservationsPage() {
   };
 
   const handleDelete = async () => {
-    await supabase.from('seat_reservations').update({ is_deleted: true }).eq('id', confirmDel);
+    await supabase.from('seat_reservations').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
     showToast('تم مسح الوصل'); setConfirmDel(null); loadData();
   };
 
@@ -1275,7 +1280,7 @@ function PaymentsPage() {
   };
 
   const handleDelete = async () => {
-    await supabase.from('payments').update({ is_deleted: true }).eq('id', confirmDel);
+    await supabase.from('payments').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
     showToast('تم مسح الوصل'); setConfirmDel(null); loadData();
   };
 
@@ -1498,7 +1503,7 @@ function PayoutsPage() {
   };
 
   const handleDelete = async () => {
-    await supabase.from('teacher_payouts').update({ is_deleted: true }).eq('id', confirmDel);
+    await supabase.from('teacher_payouts').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
     showToast('تم مسح الوصل'); setConfirmDel(null); loadData();
   };
 
@@ -1641,7 +1646,7 @@ function ExpensesPage() {
   };
 
   const handleDelete = async () => {
-    await supabase.from('expenses').update({ is_deleted: true }).eq('id', confirmDel);
+    await supabase.from('expenses').update({ is_deleted: true, deleted_by: user.user_id, deleted_at: new Date().toISOString() }).eq('id', confirmDel);
     showToast('تم مسح الوصل'); setConfirmDel(null); loadData();
   };
 
@@ -2559,6 +2564,222 @@ function ReceiptPrint({ type, data, onClose }) {
 }
 
 // ============================================
+// TRASH PAGE (المحذوفات)
+// ============================================
+function TrashPage() {
+  const showToast = useContext(ToastContext);
+  const { activeYear } = useContext(YearContext);
+  const { user } = useContext(AuthContext);
+  const [activeTab, setActiveTab] = useState('reservations');
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState([]);
+  const [confirmRestore, setConfirmRestore] = useState(null);
+  const [page, setPage] = useState(1);
+
+  const tabs = [
+    { id: 'reservations', label: 'وصولات الحجز', color: '#1B3A5C' },
+    { id: 'payments', label: 'وصولات القبض', color: '#2D8B4E' },
+    { id: 'payouts', label: 'وصولات الصرف', color: '#e74c3c' },
+    { id: 'expenses', label: 'المصروفات', color: '#e67e22' },
+    { id: 'students', label: 'الطلاب', color: '#6c757d' },
+  ];
+
+  useEffect(() => { loadData(); }, [activeTab, activeYear]);
+  useEffect(() => { setPage(1); }, [activeTab]);
+
+  const loadData = async () => {
+    if(!activeYear?.id) return;
+    setLoading(true);
+    try {
+      let res;
+      switch(activeTab) {
+        case 'reservations':
+          res = await supabase.from('seat_reservations').select('*,students(full_name),seat_reservation_items(*),creator:profiles!created_by(full_name),deleter:profiles!deleted_by(full_name)').eq('academic_year_id', activeYear.id).eq('is_deleted', true).order('deleted_at', {ascending:false});
+          break;
+        case 'payments':
+          res = await supabase.from('payments').select('*,students(full_name),creator:profiles!created_by(full_name),deleter:profiles!deleted_by(full_name)').eq('academic_year_id', activeYear.id).eq('is_deleted', true).order('deleted_at', {ascending:false});
+          break;
+        case 'payouts':
+          res = await supabase.from('teacher_payouts').select('*,teachers(full_name),creator:profiles!created_by(full_name),deleter:profiles!deleted_by(full_name)').eq('academic_year_id', activeYear.id).eq('is_deleted', true).order('deleted_at', {ascending:false});
+          break;
+        case 'expenses':
+          res = await supabase.from('expenses').select('*,expense_categories(name),creator:profiles!created_by(full_name),deleter:profiles!deleted_by(full_name)').eq('academic_year_id', activeYear.id).eq('is_deleted', true).order('deleted_at', {ascending:false});
+          break;
+        case 'students':
+          res = await supabase.from('students').select('*,grade_levels(name),deleter:profiles!deleted_by(full_name)').eq('academic_year_id', activeYear.id).eq('is_active', false).order('deleted_at', {ascending:false});
+          break;
+      }
+      setData(res?.data || []);
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  const handleRestore = async () => {
+    if(!confirmRestore) return;
+    const item = confirmRestore;
+    try {
+      switch(activeTab) {
+        case 'reservations':
+          await supabase.rpc('restore_reservation', { p_reservation_id: item.id });
+          break;
+        case 'payments':
+          await supabase.rpc('restore_payment', { p_payment_id: item.id });
+          break;
+        case 'payouts':
+          await supabase.rpc('restore_payout', { p_payout_id: item.id });
+          break;
+        case 'expenses':
+          await supabase.rpc('restore_expense', { p_expense_id: item.id });
+          break;
+        case 'students':
+          await supabase.rpc('restore_student', { p_student_id: item.id });
+          break;
+      }
+      showToast('تم استرجاع العنصر بنجاح ✓');
+      setConfirmRestore(null);
+      loadData();
+    } catch(e) { showToast('خطأ في الاسترجاع', 'error'); }
+  };
+
+  const getSubjectsText = (r) => {
+    const items = r.seat_reservation_items || [];
+    return items.length > 0 ? items.map(i => i.subject_name || '-').join('، ') : '-';
+  };
+
+  const formatDateTime = (dt) => {
+    if(!dt) return '-';
+    try { return new Date(dt).toLocaleString('ar-IQ', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }); } catch(e) { return dt; }
+  };
+
+  if(loading) return <Loading/>;
+
+  return (
+    <div className="fade-in">
+      <PageHeader title="المحذوفات"/>
+      <div className="flex flex-wrap gap-2 mb-4">
+        {tabs.map(t => (
+          <button key={t.id} onClick={()=>setActiveTab(t.id)}
+            className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+            style={activeTab===t.id ? {background:t.color, color:'white'} : {background:'#f3f4f6', color:'#374151'}}>
+            {t.label}
+            {activeTab===t.id && data.length > 0 && <span className="mr-2 px-2 py-0.5 rounded-full text-xs" style={{background:'rgba(255,255,255,0.3)'}}>{data.length}</span>}
+          </button>
+        ))}
+      </div>
+
+      {data.length === 0 ? (
+        <div className="card p-12 text-center">
+          <div className="text-gray-300 mb-3">{Icons.recycle}</div>
+          <p className="text-gray-400 text-lg">لا توجد عناصر محذوفة في هذا القسم</p>
+        </div>
+      ) : (
+        <div className="card table-container">
+          <table>
+            <thead>
+              {activeTab === 'reservations' && <tr><th>رقم الوصل</th><th>الطالب</th><th>المواد</th><th>المبلغ</th><th>تاريخ الوصل</th><th>أنشأه</th><th>حذفه</th><th>تاريخ الحذف</th><th>استرجاع</th></tr>}
+              {activeTab === 'payments' && <tr><th>رقم الوصل</th><th>الطالب</th><th>المبلغ</th><th>نوع التوزيع</th><th>تاريخ الوصل</th><th>أنشأه</th><th>حذفه</th><th>تاريخ الحذف</th><th>استرجاع</th></tr>}
+              {activeTab === 'payouts' && <tr><th>رقم الوصل</th><th>الأستاذ</th><th>المبلغ</th><th>تاريخ الوصل</th><th>أنشأه</th><th>حذفه</th><th>تاريخ الحذف</th><th>استرجاع</th></tr>}
+              {activeTab === 'expenses' && <tr><th>رقم الوصل</th><th>الصنف</th><th>المبلغ</th><th>المستلم</th><th>تاريخ الوصل</th><th>أنشأه</th><th>حذفه</th><th>تاريخ الحذف</th><th>استرجاع</th></tr>}
+              {activeTab === 'students' && <tr><th>الاسم</th><th>المرحلة</th><th>هاتف الطالب</th><th>هاتف ولي الأمر</th><th>حذفه</th><th>تاريخ الحذف</th><th>استرجاع</th></tr>}
+            </thead>
+            <tbody>
+              {activeTab === 'reservations' && paginate(data, page).map(r => (
+                <tr key={r.id}>
+                  <td className="font-mono text-sm">{r.receipt_number}</td>
+                  <td>{r.students?.full_name || '-'}</td>
+                  <td className="text-sm">{getSubjectsText(r)}</td>
+                  <td className="font-bold">{formatMoney(r.amount)} د.ع</td>
+                  <td>{formatDate(r.receipt_date)}</td>
+                  <td className="text-xs text-gray-500">{r.creator?.full_name || '-'}</td>
+                  <td className="text-xs text-red-500 font-medium">{r.deleter?.full_name || '-'}</td>
+                  <td className="text-xs text-gray-400">{formatDateTime(r.deleted_at)}</td>
+                  <td><button onClick={()=>setConfirmRestore(r)} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm font-medium">{Icons.restore} استرجاع</button></td>
+                </tr>
+              ))}
+              {activeTab === 'payments' && paginate(data, page).map(p => (
+                <tr key={p.id}>
+                  <td className="font-mono text-sm">{p.receipt_number}</td>
+                  <td>{p.students?.full_name || '-'}</td>
+                  <td className="font-bold">{formatMoney(p.total_amount)} د.ع</td>
+                  <td>{p.allocation_type==='equal'?'متساوي':'يدوي'}</td>
+                  <td>{formatDate(p.receipt_date)}</td>
+                  <td className="text-xs text-gray-500">{p.creator?.full_name || '-'}</td>
+                  <td className="text-xs text-red-500 font-medium">{p.deleter?.full_name || '-'}</td>
+                  <td className="text-xs text-gray-400">{formatDateTime(p.deleted_at)}</td>
+                  <td><button onClick={()=>setConfirmRestore(p)} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm font-medium">{Icons.restore} استرجاع</button></td>
+                </tr>
+              ))}
+              {activeTab === 'payouts' && paginate(data, page).map(p => (
+                <tr key={p.id}>
+                  <td className="font-mono text-sm">{p.voucher_number}</td>
+                  <td>{p.teachers?.full_name || '-'}</td>
+                  <td className="font-bold text-red-500">{formatMoney(p.amount)} د.ع</td>
+                  <td>{formatDate(p.payout_date)}</td>
+                  <td className="text-xs text-gray-500">{p.creator?.full_name || '-'}</td>
+                  <td className="text-xs text-red-500 font-medium">{p.deleter?.full_name || '-'}</td>
+                  <td className="text-xs text-gray-400">{formatDateTime(p.deleted_at)}</td>
+                  <td><button onClick={()=>setConfirmRestore(p)} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm font-medium">{Icons.restore} استرجاع</button></td>
+                </tr>
+              ))}
+              {activeTab === 'expenses' && paginate(data, page).map(e => (
+                <tr key={e.id}>
+                  <td className="font-mono text-sm">{e.voucher_number}</td>
+                  <td>{e.expense_categories?.name || '-'}</td>
+                  <td className="font-bold text-red-500">{formatMoney(e.amount)} د.ع</td>
+                  <td>{e.recipient || '-'}</td>
+                  <td>{formatDate(e.expense_date)}</td>
+                  <td className="text-xs text-gray-500">{e.creator?.full_name || '-'}</td>
+                  <td className="text-xs text-red-500 font-medium">{e.deleter?.full_name || '-'}</td>
+                  <td className="text-xs text-gray-400">{formatDateTime(e.deleted_at)}</td>
+                  <td><button onClick={()=>setConfirmRestore(e)} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm font-medium">{Icons.restore} استرجاع</button></td>
+                </tr>
+              ))}
+              {activeTab === 'students' && paginate(data, page).map(s => (
+                <tr key={s.id}>
+                  <td className="font-medium">{s.full_name}</td>
+                  <td>{s.grade_levels?.name || '-'}</td>
+                  <td>{s.student_phone || '-'}</td>
+                  <td>{s.parent_phone || '-'}</td>
+                  <td className="text-xs text-red-500 font-medium">{s.deleter?.full_name || '-'}</td>
+                  <td className="text-xs text-gray-400">{formatDateTime(s.deleted_at)}</td>
+                  <td><button onClick={()=>setConfirmRestore(s)} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm font-medium">{Icons.restore} استرجاع</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pagination total={data.length} page={page} setPage={setPage}/>
+        </div>
+      )}
+
+      {/* Restore Confirmation Dialog */}
+      {confirmRestore && (
+        <div className="modal-overlay" onClick={()=>setConfirmRestore(null)}>
+          <div className="modal-content max-w-md" onClick={e=>e.stopPropagation()}>
+            <h3 className="font-bold text-lg mb-3 text-green-700">تأكيد الاسترجاع</h3>
+            <div className="bg-green-50 rounded-lg p-4 mb-4">
+              <p className="text-gray-700 mb-2">هل تريد استرجاع هذا العنصر؟</p>
+              <div className="text-sm text-gray-600 space-y-1">
+                {confirmRestore.receipt_number && <p>رقم الوصل: <b>{confirmRestore.receipt_number}</b></p>}
+                {confirmRestore.voucher_number && <p>رقم الوصل: <b>{confirmRestore.voucher_number}</b></p>}
+                {confirmRestore.full_name && activeTab==='students' && <p>الطالب: <b>{confirmRestore.full_name}</b></p>}
+                {confirmRestore.students?.full_name && <p>الطالب: <b>{confirmRestore.students.full_name}</b></p>}
+                {confirmRestore.teachers?.full_name && <p>الأستاذ: <b>{confirmRestore.teachers.full_name}</b></p>}
+                {(confirmRestore.amount || confirmRestore.total_amount) && <p>المبلغ: <b>{formatMoney(confirmRestore.amount || confirmRestore.total_amount)} د.ع</b></p>}
+              </div>
+              <p className="text-xs text-green-600 mt-3">سيتم إرجاع العنصر للنظام بتاريخه الأصلي وسيعود للحسابات.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={handleRestore} className="flex-1 py-2 rounded-lg text-white font-medium" style={{background:'#2D8B4E'}}>نعم، استرجاع</button>
+              <button onClick={()=>setConfirmRestore(null)} className="flex-1 py-2 rounded-lg border border-gray-300 text-gray-700">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================
 // MORE MENU (Mobile)
 // ============================================
 function MoreMenu({ setActivePage }) {
@@ -2683,6 +2904,7 @@ function App() {
       case 'reports': return <ReportsPage/>;
       case 'settings': return <SettingsPage/>;
       case 'usermgmt': return <UserMgmtPage/>;
+      case 'trash': return <TrashPage/>;
       case 'more': return <MoreMenu setActivePage={setActivePage}/>;
       default: return <DashboardPage/>;
     }
