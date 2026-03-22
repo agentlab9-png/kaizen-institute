@@ -1558,8 +1558,12 @@ function PaymentsPage() {
     const calcInstShare = (amt, reg) => {
       if(!reg || !amt) return 0;
       if(reg.teachers?.commission_type === 'percentage') return Math.round(amt * reg.teachers.commission_value / 100);
-      if(reg.total_tuition > 0) return Math.round(amt * reg.institute_share / reg.total_tuition);
-      return amt;
+      // Fixed commission: institute takes its fixed amount first, teacher gets the rest
+      const fixedAmount = reg.teachers?.commission_value || reg.institute_share || 0;
+      const previouslyPaid = reg.total_paid || 0;
+      const instAlreadyCovered = Math.min(previouslyPaid, fixedAmount);
+      const instRemaining = Math.max(0, fixedAmount - instAlreadyCovered);
+      return Math.min(amt, instRemaining);
     };
     if(form.allocation_type === 'equal') {
       const perSubject = Math.floor(total / studentRegs.length);
