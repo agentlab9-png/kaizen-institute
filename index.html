@@ -137,7 +137,8 @@ const supabase = {
       single: function() { this._single = true; return this; },
       then: async function(resolve) {
         try {
-          const url = `${SUPABASE_URL}/rest/v1/${this._table}`;
+          let url = `${SUPABASE_URL}/rest/v1/${this._table}`;
+          if(this._returning) url += `?select=${encodeURIComponent(this._returning)}`;
           const headers = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
           if(this._single) headers['Accept'] = 'application/vnd.pgrst.object+json';
           const res = await fetch(url, { method:'POST', headers, body: JSON.stringify(Array.isArray(this._data)?this._data:[this._data]) });
@@ -150,6 +151,8 @@ const supabase = {
     update: (data) => ({
       _table: table, _data: data, _filters: [],
       eq: function(col,val) { this._filters.push(`${col}=eq.${val}`); return this; },
+      neq: function(col,val) { this._filters.push(`${col}=neq.${val}`); return this; },
+      in: function(col,vals) { this._filters.push(`${col}=in.(${vals.join(',')})`); return this; },
       select: function() { this._returning = true; return this; },
       single: function() { this._single = true; return this; },
       then: async function(resolve) {
@@ -2993,9 +2996,15 @@ function MoreMenu({ setActivePage }) {
   const items = [
     { id:'expenses', label:'المصروفات', icon:Icons.receipt, perm:'expenses.view' },
     { id:'reports', label:'التقارير', icon:Icons.reports, perm:'reports.revenue' },
+    { id:'advreports', label:'التقارير المتقدمة', icon:Icons.chart, perm:'reports.revenue' },
     { id:'settings', label:'الإعدادات', icon:Icons.settings, perm:'settings.years' },
   ];
-  if(user.role==='admin') items.push({ id:'usermgmt', label:'إدارة المستخدمين', icon:Icons.users });
+  if(user.role==='admin') {
+    items.push({ id:'loginlog', label:'سجل الدخول', icon:Icons.history });
+    items.push({ id:'auditlog', label:'سجل العمليات', icon:Icons.eye });
+    items.push({ id:'trash', label:'المحذوفات', icon:Icons.recycle });
+    items.push({ id:'usermgmt', label:'إدارة المستخدمين', icon:Icons.users });
+  }
 
   return (
     <div className="fade-in">
@@ -3348,7 +3357,7 @@ function NotificationsPanel({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-50" onClick={onClose}>
-      <div className="absolute left-4 top-16 w-96 max-w-[90vw] bg-white rounded-xl shadow-2xl border max-h-[70vh] overflow-y-auto" onClick={e=>e.stopPropagation()}>
+      <div className="card absolute left-4 top-16 w-96 max-w-[90vw] rounded-xl shadow-2xl border max-h-[70vh] overflow-y-auto" onClick={e=>e.stopPropagation()}>
         <div className="p-4 border-b flex justify-between items-center">
           <h3 className="font-bold text-gray-800">التنبيهات</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">{Icons.close}</button>
