@@ -2002,7 +2002,7 @@ function ReportsPage() {
     if(!selectedStudent) return;
     setLoading(true);
     const { data: regs } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name)')
-      .eq('student_id', selectedStudent).eq('academic_year_id', activeYear?.id);
+      .eq('student_id', selectedStudent).eq('academic_year_id', activeYear?.id).eq('is_active', true);
     const { data: payments } = await supabase.from('payment_allocations').select('*,payments!inner(receipt_number,receipt_date,total_amount,is_deleted)')
       .in('registration_id', (regs||[]).map(r=>r.id)).eq('payments.is_deleted', false);
     const { data: reservs } = await supabase.from('seat_reservations').select('*,seat_reservation_items(*)').eq('student_id', selectedStudent).eq('is_deleted', false);
@@ -2015,7 +2015,7 @@ function ReportsPage() {
     if(!selectedTeacher) return;
     setLoading(true);
     const { data: regs } = await supabase.from('registrations').select('*,students(full_name,grade_levels(name)),subjects(name_ar)')
-      .eq('teacher_id', selectedTeacher).eq('academic_year_id', activeYear?.id);
+      .eq('teacher_id', selectedTeacher).eq('academic_year_id', activeYear?.id).eq('is_active', true);
     const { data: payouts } = await supabase.from('teacher_payouts').select('*')
       .eq('teacher_id', selectedTeacher).eq('is_deleted', false).order('created_at', {ascending: true});
     const { data: teacher } = await supabase.from('teachers').select('*').eq('id', selectedTeacher).single();
@@ -3392,7 +3392,7 @@ async function backupAllData(activeYear, showToast) {
     const [studRes, teachRes, regRes, seatRes, payRes, allocRes, payoutRes, expRes, catRes] = await Promise.all([
       supabase.from('students').select('*,grade_levels(name)').eq('academic_year_id', activeYear?.id),
       supabase.from('teachers').select('*'),
-      supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name),students(full_name)').eq('academic_year_id', activeYear?.id),
+      supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name),students(full_name)').eq('academic_year_id', activeYear?.id).eq('is_active', true),
       supabase.from('seat_reservations').select('*,students(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false),
       supabase.from('payments').select('*,students(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false),
       supabase.from('payment_allocations').select('*,registrations(subjects(name_ar),students(full_name)),payments!inner(receipt_number,academic_year_id,is_deleted)').eq('payments.academic_year_id', activeYear?.id).eq('payments.is_deleted', false),
