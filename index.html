@@ -2780,12 +2780,22 @@ function ReceiptPrint({ type, data, onClose }) {
 
   const handlePrint = () => {
     const content = printRef.current.innerHTML;
+    // ===== الكثافة الذكية حسب عدد المواد لضبط الوصل على ورقة A5 =====
+    const itemCount = (data.seat_reservation_items || []).length;
+    let density = 'normal';
+    if (itemCount >= 4 && itemCount <= 6) density = 'compact';
+    else if (itemCount >= 7 && itemCount <= 10) density = 'dense';
+    else if (itemCount > 10) density = 'tight';
+
     const win = window.open('', '_blank');
     win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>وصل</title>
       <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
       <style>
+        @page { size: A5 portrait; margin: 0; }
         * { font-family: 'Cairo', sans-serif; margin:0; padding:0; box-sizing:border-box; }
-        body { padding: 15mm; width: 148mm; }
+        html, body { width: 148mm; }
+        body { padding: 7mm; }
+        .receipt-host { width: 100%; transform-origin: top center; }
         .receipt { border: 2px solid #1B3A5C; border-radius: 8px; padding: 15px; }
         .header { text-align: center; border-bottom: 2px solid #1B3A5C; padding-bottom: 10px; margin-bottom: 10px; }
         .header h2 { color: #1B3A5C; font-size: 18px; }
@@ -2803,10 +2813,93 @@ function ReceiptPrint({ type, data, onClose }) {
         table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
         th { background: #f5f5f5; padding: 5px; border: 1px solid #ddd; font-size: 11px; }
         td { padding: 5px; border: 1px solid #ddd; }
+        .density-compact .receipt { padding: 10px !important; }
+        .density-compact .header { padding-bottom: 6px !important; margin-bottom: 6px !important; }
+        .density-compact .header h2 { font-size: 16px !important; }
+        .density-compact .header p { font-size: 10px !important; }
+        .density-compact .header svg { width: 42px !important; height: 42px !important; }
+        .density-compact .receipt-type { padding: 3px 12px !important; font-size: 12px !important; margin: 5px 0 !important; }
+        .density-compact .info-row { padding: 3px 0 !important; font-size: 12px !important; }
+        .density-compact table { margin: 5px 0 !important; font-size: 11px !important; }
+        .density-compact th, .density-compact td { padding: 3px 4px !important; font-size: 10.5px !important; }
+        .density-compact .amount-box { padding: 6px !important; margin: 6px 0 !important; }
+        .density-compact .amount-num { font-size: 20px !important; }
+        .density-compact .amount-words { font-size: 10px !important; }
+        .density-compact .signatures { margin-top: 14px !important; padding-top: 6px !important; }
+        .density-compact .sig-line { margin-top: 22px !important; }
+        .density-compact .warning { padding: 3px !important; font-size: 10.5px !important; margin: 5px 0 !important; }
+        .density-dense .receipt { padding: 7px !important; }
+        .density-dense .header { padding-bottom: 5px !important; margin-bottom: 5px !important; }
+        .density-dense .header h2 { font-size: 14px !important; }
+        .density-dense .header p { font-size: 9px !important; }
+        .density-dense .header svg { width: 36px !important; height: 36px !important; }
+        .density-dense .receipt-type { padding: 2px 10px !important; font-size: 11px !important; margin: 4px 0 !important; }
+        .density-dense .info-row { padding: 2px 0 !important; font-size: 11px !important; }
+        .density-dense table { margin: 4px 0 !important; font-size: 10px !important; }
+        .density-dense th, .density-dense td { padding: 2px 3px !important; font-size: 9.5px !important; line-height: 1.3 !important; }
+        .density-dense .amount-box { padding: 5px !important; margin: 5px 0 !important; }
+        .density-dense .amount-num { font-size: 17px !important; }
+        .density-dense .amount-words { font-size: 9px !important; }
+        .density-dense .signatures { margin-top: 10px !important; padding-top: 5px !important; }
+        .density-dense .sig-line { margin-top: 16px !important; }
+        .density-dense .sig-label { font-size: 10px !important; }
+        .density-dense .warning { padding: 2px !important; font-size: 10px !important; margin: 4px 0 !important; }
+        .density-tight .receipt { padding: 5px !important; }
+        .density-tight .header { padding-bottom: 4px !important; margin-bottom: 4px !important; }
+        .density-tight .header h2 { font-size: 13px !important; }
+        .density-tight .header p { font-size: 8.5px !important; }
+        .density-tight .header svg { width: 30px !important; height: 30px !important; }
+        .density-tight .receipt-type { padding: 2px 8px !important; font-size: 10.5px !important; margin: 3px 0 !important; }
+        .density-tight .info-row { padding: 1px 0 !important; font-size: 10px !important; }
+        .density-tight table { margin: 3px 0 !important; font-size: 9px !important; }
+        .density-tight th, .density-tight td { padding: 1px 3px !important; font-size: 8.5px !important; line-height: 1.2 !important; }
+        .density-tight .amount-box { padding: 4px !important; margin: 4px 0 !important; }
+        .density-tight .amount-num { font-size: 15px !important; }
+        .density-tight .amount-words { font-size: 8.5px !important; }
+        .density-tight .signatures { margin-top: 8px !important; padding-top: 4px !important; }
+        .density-tight .sig-line { margin-top: 12px !important; }
+        .density-tight .sig-label { font-size: 9px !important; }
+        .density-tight .warning { padding: 2px !important; font-size: 9.5px !important; margin: 3px 0 !important; }
       </style>
-    </head><body>${content}</body></html>`);
+    </head><body>
+      <div class="receipt-host density-${density}" id="rcptHost">${content}</div>
+      <script>
+        (function(){
+          function pxOf(mm){ return (mm/25.4)*96; }
+          function autoFit(){
+            var w = document.getElementById('rcptHost');
+            if(!w) return;
+            var maxPx = pxOf(193);
+            w.style.zoom = '';
+            w.style.transform = '';
+            void w.offsetHeight;
+            var h = w.scrollHeight;
+            if(h > maxPx){
+              var z = Math.max(0.55, maxPx / h);
+              w.style.zoom = z;
+              void w.offsetHeight;
+              if(w.scrollHeight > maxPx){
+                w.style.zoom = '';
+                w.style.transform = 'scale('+z+')';
+                w.style.width = (100/z).toFixed(3) + '%';
+              }
+            }
+          }
+          function ready(cb){
+            if(document.fonts && document.fonts.ready){
+              document.fonts.ready.then(function(){ setTimeout(cb, 50); }).catch(cb);
+            } else {
+              window.addEventListener('load', function(){ setTimeout(cb, 200); });
+            }
+          }
+          ready(function(){
+            autoFit();
+            setTimeout(function(){ window.print(); }, 250);
+          });
+        })();
+      </script>
+    </body></html>`);
     win.document.close();
-    setTimeout(() => { win.print(); }, 500);
   };
 
   return (
@@ -2841,24 +2934,24 @@ function ReceiptPrint({ type, data, onClose }) {
               {type === 'payout' && <div style={{background:'#e74c3c', color:'white', padding:'5px 15px', borderRadius:20, display:'inline-block', fontSize:14, fontWeight:'bold', margin:'8px 0'}}>وصل صرف أستاذ</div>}
               {type === 'expense' && <div style={{background:'#e67e22', color:'white', padding:'5px 15px', borderRadius:20, display:'inline-block', fontSize:14, fontWeight:'bold', margin:'8px 0'}}>وصل مصروفات</div>}
             </div>
-            <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
+            <div className="info-row" style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
               <span>رقم الوصل: <b>{data.receipt_number || data.voucher_number}</b></span>
               <span>التاريخ: <b>{formatDate(data.receipt_date || data.payout_date || data.expense_date)}</b></span>
             </div>
-            {(type === 'reservation' || type === 'payment') && <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
+            {(type === 'reservation' || type === 'payment') && <div className="info-row" style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
               <span>الطالب: <b>{data.students?.full_name || '-'}</b></span>
               {data.students?.grade_levels?.name && <span>المرحلة: <b>{data.students?.grade_levels?.name}</b></span>}
             </div>}
-            {type === 'payout' && <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
+            {type === 'payout' && <div className="info-row" style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
               <span>الأستاذ: <b>{data.teachers?.full_name || '-'}</b></span>
               <span>الرصيد قبل: <b>{formatMoney(data.balance_before)} د.ع</b></span>
               <span>الرصيد بعد: <b>{formatMoney(data.balance_after)} د.ع</b></span>
             </div>}
-            {type === 'expense' && <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
+            {type === 'expense' && <div className="info-row" style={{display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:13, borderBottom:'1px dotted #ddd'}}>
               <span>الصنف: <b>{data.expense_categories?.name || '-'}</b></span>
               {data.description && <span>الوصف: <b>{data.description}</b></span>}
             </div>}
-            <div style={{padding:'4px 0', fontSize:12, color:'#555', borderBottom:'1px dotted #ddd'}}>
+            <div className="info-row" style={{padding:'4px 0', fontSize:12, color:'#555', borderBottom:'1px dotted #ddd'}}>
               <span>منظم الوصل: <b>{data.creator?.full_name || '-'}</b></span>
             </div>
             {/* Show subjects - multi or single */}
@@ -2877,16 +2970,16 @@ function ReceiptPrint({ type, data, onClose }) {
                 {data.registrations?.teachers?.full_name && <span style={{marginRight:20}}>الأستاذ: <b>{data.registrations?.teachers?.full_name}</b></span>}
               </div>
             ) : null}
-            <div style={{background: type==='payout' ? '#fef0f0' : type==='expense' ? '#fff8f0' : '#f0f7f0', border: `2px solid ${type==='payout' ? '#e74c3c' : type==='expense' ? '#e67e22' : '#2D8B4E'}`, borderRadius:8, padding:10, textAlign:'center', margin:'10px 0'}}>
-              <div style={{fontSize:24, fontWeight:'bold', color: type==='payout' ? '#e74c3c' : type==='expense' ? '#e67e22' : '#2D8B4E'}}>{formatMoney(data.amount || data.total_amount)} د.ع</div>
-              <div style={{fontSize:11, color:'#666'}}>فقط {formatMoney(data.amount || data.total_amount)} دينار عراقي لا غير</div>
+            <div className="amount-box" style={{background: type==='payout' ? '#fef0f0' : type==='expense' ? '#fff8f0' : '#f0f7f0', border: `2px solid ${type==='payout' ? '#e74c3c' : type==='expense' ? '#e67e22' : '#2D8B4E'}`, borderRadius:8, padding:10, textAlign:'center', margin:'10px 0'}}>
+              <div className="amount-num" style={{fontSize:24, fontWeight:'bold', color: type==='payout' ? '#e74c3c' : type==='expense' ? '#e67e22' : '#2D8B4E'}}>{formatMoney(data.amount || data.total_amount)} د.ع</div>
+              <div className="amount-words" style={{fontSize:11, color:'#666'}}>فقط {formatMoney(data.amount || data.total_amount)} دينار عراقي لا غير</div>
             </div>
-            {data.notes && <div style={{padding:'5px 0', fontSize:12, color:'#555'}}>ملاحظات: <b>{data.notes}</b></div>}
-            {type === 'reservation' && <div style={{background:'#fff3cd', padding:5, textAlign:'center', fontSize:12, color:'#856404', borderRadius:4, fontWeight:'bold'}}>المبلغ غير قابل للاسترجاع</div>}
-            <div style={{display:'flex', justifyContent:'space-between', marginTop:25, paddingTop:10, borderTop:'1px solid #ddd'}}>
-              <div style={{textAlign:'center', width:'30%'}}><div style={{borderBottom:'1px solid #333', marginTop:30, marginBottom:5}}></div><div style={{fontSize:11, color:'#666'}}>توقيع المستلم</div></div>
-              <div style={{textAlign:'center', width:'30%'}}><div style={{borderBottom:'1px solid #333', marginTop:30, marginBottom:5}}></div><div style={{fontSize:11, color:'#666'}}>ختم المعهد</div></div>
-              <div style={{textAlign:'center', width:'30%'}}><div style={{borderBottom:'1px solid #333', marginTop:30, marginBottom:5}}></div><div style={{fontSize:11, color:'#666'}}>توقيع المسلم</div></div>
+            {data.notes && <div className="info-row" style={{padding:'5px 0', fontSize:12, color:'#555'}}>ملاحظات: <b>{data.notes}</b></div>}
+            {type === 'reservation' && <div className="warning" style={{background:'#fff3cd', padding:5, textAlign:'center', fontSize:12, color:'#856404', borderRadius:4, fontWeight:'bold'}}>المبلغ غير قابل للاسترجاع</div>}
+            <div className="signatures" style={{display:'flex', justifyContent:'space-between', marginTop:25, paddingTop:10, borderTop:'1px solid #ddd'}}>
+              <div className="sig-box" style={{textAlign:'center', width:'30%'}}><div className="sig-line" style={{borderBottom:'1px solid #333', marginTop:30, marginBottom:5}}></div><div className="sig-label" style={{fontSize:11, color:'#666'}}>توقيع المستلم</div></div>
+              <div className="sig-box" style={{textAlign:'center', width:'30%'}}><div className="sig-line" style={{borderBottom:'1px solid #333', marginTop:30, marginBottom:5}}></div><div className="sig-label" style={{fontSize:11, color:'#666'}}>ختم المعهد</div></div>
+              <div className="sig-box" style={{textAlign:'center', width:'30%'}}><div className="sig-line" style={{borderBottom:'1px solid #333', marginTop:30, marginBottom:5}}></div><div className="sig-label" style={{fontSize:11, color:'#666'}}>توقيع المسلم</div></div>
             </div>
           </div>
         </div>
