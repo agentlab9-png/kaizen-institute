@@ -2863,7 +2863,7 @@ function ReceiptPrint({ type, data, onClose }) {
       </style>
     </head><body>
       <div class="receipt-host density-${density}" id="rcptHost">${content}</div>
-      <script>
+      <` + `script>
         (function(){
           function pxOf(mm){ return (mm/25.4)*96; }
           function autoFit(){
@@ -2897,7 +2897,7 @@ function ReceiptPrint({ type, data, onClose }) {
             setTimeout(function(){ window.print(); }, 250);
           });
         })();
-      </script>
+      <` + `/script>
     </body></html>`);
     win.document.close();
   };
