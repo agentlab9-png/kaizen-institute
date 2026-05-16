@@ -1492,7 +1492,7 @@ function PaymentsPage() {
   const loadData = async () => {
     setLoading(true);
     const [pRes, sRes] = await Promise.all([
-      supabase.from('payments').select('*,students(full_name),creator:profiles!created_by(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
+      supabase.from('payments').select('*,students(full_name,grade_levels(name)),payment_allocations(*,registrations(subjects(name_ar),teachers(full_name))),creator:profiles!created_by(full_name)').eq('academic_year_id', activeYear?.id).eq('is_deleted', false).order('created_at', {ascending:false}),
       supabase.from('students').select('*').eq('academic_year_id', activeYear?.id).eq('is_active', true)
     ]);
     setPayments(pRes.data || []);
@@ -2781,7 +2781,7 @@ function ReceiptPrint({ type, data, onClose }) {
   const handlePrint = () => {
     const content = printRef.current.innerHTML;
     // ===== الكثافة الذكية حسب عدد المواد لضبط الوصل على ورقة A5 =====
-    const itemCount = (data.seat_reservation_items || []).length;
+    const itemCount = ((data.seat_reservation_items && data.seat_reservation_items.length) ? data.seat_reservation_items : (data.payment_allocations || [])).length;
     let density = 'normal';
     if (itemCount >= 4 && itemCount <= 6) density = 'compact';
     else if (itemCount >= 7 && itemCount <= 10) density = 'dense';
@@ -2961,6 +2961,15 @@ function ReceiptPrint({ type, data, onClose }) {
                 <tbody>
                   {(data.seat_reservation_items||[]).map((it, idx) => (
                     <tr key={idx}><td style={{padding:5, border:'1px solid #ddd'}}>{it.subject_name || '-'}</td><td style={{padding:5, border:'1px solid #ddd'}}>{it.teacher_name || '-'}</td><td style={{padding:5, border:'1px solid #ddd', fontWeight:'bold'}}>{formatMoney(it.amount)} د.ع</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : type === 'payment' && (data.payment_allocations||[]).length > 0 ? (
+              <table style={{width:'100%', borderCollapse:'collapse', margin:'8px 0', fontSize:12}}>
+                <thead><tr style={{background:'#f5f5f5'}}><th style={{padding:5, border:'1px solid #ddd'}}>المادة</th><th style={{padding:5, border:'1px solid #ddd'}}>الأستاذ</th><th style={{padding:5, border:'1px solid #ddd'}}>المبلغ المسدد</th></tr></thead>
+                <tbody>
+                  {(data.payment_allocations||[]).map((it, idx) => (
+                    <tr key={idx}><td style={{padding:5, border:'1px solid #ddd'}}>{it.registrations?.subjects?.name_ar || '-'}</td><td style={{padding:5, border:'1px solid #ddd'}}>{it.registrations?.teachers?.full_name || '-'}</td><td style={{padding:5, border:'1px solid #ddd', fontWeight:'bold'}}>{formatMoney(it.amount)} د.ع</td></tr>
                   ))}
                 </tbody>
               </table>
