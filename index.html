@@ -242,6 +242,26 @@ const formatDate = (date) => {
 };
 const todayStr = () => new Date().toISOString().split('T')[0];
 
+// ============================================
+// تقسيم المبالغ بفئات صحيحة (دينار عراقي)
+// ============================================
+const PAYMENT_UNIT = 1000; // أصغر فئة مقبولة بالتوزيع
+// تقريب مبلغ لأقرب وحدة (1000)
+const roundToUnit = (amount, unit = PAYMENT_UNIT) => Math.round((Number(amount) || 0) / unit) * unit;
+// تقسيم مبلغ بالتساوي على n حصص: كل حصة مضاعف للوحدة، والمجموع = المبلغ بالضبط
+const splitEqualByUnit = (total, n, unit = PAYMENT_UNIT) => {
+  total = Number(total) || 0;
+  if(n <= 0) return [];
+  const units = Math.floor(total / unit);     // عدد الوحدات الكاملة
+  const base = Math.floor(units / n);         // نصيب كل حصة من الوحدات
+  const extra = units - base * n;             // وحدات زائدة توزّع وحدة-وحدة
+  const subRemainder = total - units * unit;  // باقي أصغر من الوحدة (طبيعياً = 0)
+  const shares = [];
+  for(let i = 0; i < n; i++) shares.push(base * unit + (i < extra ? unit : 0));
+  if(subRemainder > 0) shares[0] += subRemainder; // نضمن المجموع = المبلغ بالضبط
+  return shares;
+};
+
 // Export to Excel utility
 const exportToExcel = (data, headers, filename) => {
   const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
@@ -991,7 +1011,7 @@ function StudentsPage() {
     const existingReg = registrations.find(r => r.subject_id === regForm.subject_id && r.teacher_id === regForm.teacher_id);
     if(existingReg) { showToast('هذا الطالب مسجل بالفعل في هذه المادة مع نفس الأستاذ', 'error'); return; }
     const teacher = teachers.find(t=>t.id===regForm.teacher_id);
-    let instShare = teacher.commission_type==='percentage' ? Math.round(total * teacher.commission_value / 100) : teacher.commission_value;
+    let instShare = teacher.commission_type==='percentage' ? roundToUnit(total * teacher.commission_value / 100) : teacher.commission_value;
     let teacherShare = total - instShare;
     const { error } = await supabase.from('registrations').insert({
       student_id: regStudent.id, subject_id: regForm.subject_id, teacher_id: regForm.teacher_id,
@@ -1611,7 +1631,7 @@ function PaymentsPage() {
     let allocs = [];
     const calcInstShare = (amt, reg) => {
       if(!reg || !amt) return 0;
-      if(reg.teachers?.commission_type === 'percentage') return Math.round(amt * reg.teachers.commission_value / 100);
+      if(reg.teachers?.commission_type === 'percentage') return roundToUnit(amt * reg.teachers.commission_value / 100);
       // Fixed commission: institute takes its fixed amount first, teacher gets the rest
       const fixedAmount = reg.teachers?.commission_value || reg.institute_share || 0;
       const previouslyPaid = reg.total_paid || 0;
@@ -1620,10 +1640,9 @@ function PaymentsPage() {
       return Math.min(amt, instRemaining);
     };
     if(form.allocation_type === 'equal') {
-      const perSubject = Math.floor(total / studentRegs.length);
-      let remainder = total - (perSubject * studentRegs.length);
+      const shares = splitEqualByUnit(total, studentRegs.length);
       allocs = studentRegs.map((r, i) => {
-        const amt = perSubject + (i === 0 ? remainder : 0);
+        const amt = shares[i];
         const instShare = calcInstShare(amt, r);
         return { registration_id: r.id, amount: amt, institute_share: instShare, teacher_share: amt - instShare };
       });
