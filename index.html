@@ -1012,6 +1012,13 @@ function StudentsPage() {
     if(existingReg) { showToast('هذا الطالب مسجل بالفعل في هذه المادة مع نفس الأستاذ', 'error'); return; }
     const teacher = teachers.find(t=>t.id===regForm.teacher_id);
     let instShare = teacher.commission_type==='percentage' ? roundToUnit(total * teacher.commission_value / 100) : teacher.commission_value;
+    // منع حصة أستاذ سالبة: حصة المعهد ما تتجاوز القسط الكلي
+    if(instShare > total) {
+      showToast(teacher.commission_type==='fixed'
+        ? `القسط الكلي (${formatMoney(total)} د.ع) أصغر من حصة المعهد الثابتة (${formatMoney(instShare)} د.ع). تأكد من المبلغ.`
+        : `حصة المعهد (${formatMoney(instShare)} د.ع) أكبر من القسط الكلي. تأكد من المبلغ.`, 'error');
+      return;
+    }
     let teacherShare = total - instShare;
     const { error } = await supabase.from('registrations').insert({
       student_id: regStudent.id, subject_id: regForm.subject_id, teacher_id: regForm.teacher_id,
