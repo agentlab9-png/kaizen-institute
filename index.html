@@ -698,6 +698,7 @@ function DashboardPage() {
 
   const [noSeatStudents, setNoSeatStudents] = useState([]);
   const [seatDetail, setSeatDetail] = useState(null);
+  const [expenseBreakdown, setExpenseBreakdown] = useState([]);
 
   const loadData = async () => {
     if(!activeYear?.id) return;
@@ -707,6 +708,11 @@ function DashboardPage() {
       setStats(s);
       const { data: c } = await supabase.rpc('get_monthly_chart_data', { p_year_id: activeYear.id });
       setChartData(c || []);
+      // تفصيل المصروفات حسب الفئة (للسنة كلها)
+      const { data: expRows } = await supabase.from('expenses').select('amount,expense_categories(name)').eq('academic_year_id', activeYear.id).eq('is_deleted', false);
+      const breakdown = {};
+      (expRows||[]).forEach(e => { const k = e.expense_categories?.name || 'غير مصنّف'; breakdown[k] = (breakdown[k]||0) + (e.amount||0); });
+      setExpenseBreakdown(Object.entries(breakdown).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total));
       // Check students registered but without full seat reservation coverage
       const { data: allStudents } = await supabase.from('students').select('id,full_name').eq('academic_year_id', activeYear.id).eq('is_active', true);
       const { data: allRegs } = await supabase.from('registrations').select('id,student_id,subject_id,subjects(name_ar),teachers(full_name)').eq('academic_year_id', activeYear.id).eq('is_active', true);
@@ -746,7 +752,7 @@ function DashboardPage() {
     { label: 'عدد الأساتذة', value: stats?.total_teachers || 0, color: '#2D8B4E', icon: Icons.teachers },
     { label: 'إيرادات الشهر', value: formatMoney(stats?.month_revenue || 0) + ' د.ع', color: '#2D8B4E', icon: Icons.money },
     { label: 'مصروفات الشهر', value: formatMoney(stats?.month_expenses || 0) + ' د.ع', color: '#e74c3c', icon: Icons.expense },
-    { label: 'صافي الربح', value: formatMoney(stats?.net_profit || 0) + ' د.ع', color: (stats?.net_profit||0) >= 0 ? '#2D8B4E' : '#e74c3c', icon: Icons.reports },
+    { label: 'صافي ربح الشهر', value: formatMoney(stats?.net_profit || 0) + ' د.ع', color: (stats?.net_profit||0) >= 0 ? '#2D8B4E' : '#e74c3c', icon: Icons.reports },
     { label: 'الأرصدة المعلقة', value: formatMoney(stats?.total_outstanding || 0) + ' د.ع', color: '#e67e22', icon: Icons.receipt },
   ];
 
@@ -768,6 +774,36 @@ function DashboardPage() {
             </div>
           </div>
         ))}
+      </div>
+      {/* الإجمالي التراكمي للسنة */}
+      <div className="card p-5 mb-8">
+        <h3 className="font-bold text-gray-700 mb-4">📊 الإجمالي التراكمي للسنة - {activeYear?.name}</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="text-center p-3 rounded-lg bg-gray-50 border">
+            <p className="text-gray-500 text-sm mb-1">إجمالي الإيرادات</p>
+            <p className="text-xl font-bold text-green-600">{formatMoney(stats?.year_revenue||0)} د.ع</p>
+          </div>
+          <div className="text-center p-3 rounded-lg bg-gray-50 border">
+            <p className="text-gray-500 text-sm mb-1">إجمالي المصروفات</p>
+            <p className="text-xl font-bold text-red-500">{formatMoney(stats?.year_expenses||0)} د.ع</p>
+          </div>
+          <div className="text-center p-3 rounded-lg bg-gray-50 border">
+            <p className="text-gray-500 text-sm mb-1">صافي ربح السنة</p>
+            <p className="text-xl font-bold" style={{color:(stats?.year_profit||0)>=0?'#2D8B4E':'#e74c3c'}}>{formatMoney(stats?.year_profit||0)} د.ع</p>
+          </div>
+        </div>
+        {expenseBreakdown.length > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <p className="text-sm font-semibold text-gray-600 mb-2">تفصيل المصروفات حسب الفئة:</p>
+            <div className="flex flex-wrap gap-2">
+              {expenseBreakdown.map((e,i)=>(
+                <span key={i} className="px-3 py-1.5 rounded-lg text-sm" style={{background:'#fef2f2',color:'#991b1b',border:'1px solid #fecaca'}}>
+                  {e.name}: <b>{formatMoney(e.total)}</b> د.ع
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       {noSeatStudents.length > 0 && (
         <div className="card p-4 mb-6 border-r-4" style={{borderRightColor:'#e67e22', background:'#FFF8F0'}}>
