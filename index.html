@@ -2355,14 +2355,19 @@ function ReportsPage() {
     setLoading(true);
     // Revenue
     const { data: seats } = await supabase.from('seat_reservations').select('amount').eq('academic_year_id', activeYear?.id).eq('is_deleted', false);
-    const { data: payAllocs } = await supabase.from('payment_allocations').select('institute_share,payments!inner(academic_year_id,is_deleted)')
+    const { data: payAllocs } = await supabase.from('payment_allocations').select('institute_share,teacher_share,payments!inner(academic_year_id,is_deleted)')
       .eq('payments.academic_year_id', activeYear?.id).eq('payments.is_deleted', false);
     // Expenses
     const { data: exps } = await supabase.from('expenses').select('amount,expense_categories(name)')
       .eq('academic_year_id', activeYear?.id).eq('is_deleted', false);
+    // Teacher payouts (المصروف للأساتذة)
+    const { data: payouts } = await supabase.from('teacher_payouts').select('amount')
+      .eq('academic_year_id', activeYear?.id).eq('is_deleted', false);
 
     const totalSeats = (seats||[]).reduce((s,r)=>s+r.amount, 0);
     const totalInstShare = (payAllocs||[]).reduce((s,r)=>s+r.institute_share, 0);
+    const totalTeacherShare = (payAllocs||[]).reduce((s,r)=>s+(r.teacher_share||0), 0);
+    const totalPaidToTeachers = (payouts||[]).reduce((s,r)=>s+r.amount, 0);
     const totalExpenses = (exps||[]).reduce((s,r)=>s+r.amount, 0);
     // Group expenses by category
     const expByCat = {};
@@ -2370,7 +2375,11 @@ function ReportsPage() {
       const cat = e.expense_categories?.name || 'أخرى';
       expByCat[cat] = (expByCat[cat]||0) + e.amount;
     });
-    setData({ totalSeats, totalInstShare, totalRevenue: totalSeats + totalInstShare, totalExpenses, netProfit: totalSeats + totalInstShare - totalExpenses, expByCat });
+    const instituteRevenue = totalSeats + totalInstShare; // إيراد المعهد (حصته فقط)
+    const cashIn = instituteRevenue + totalTeacherShare;   // كل النقد المستلم
+    const teacherLiability = totalTeacherShare - totalPaidToTeachers; // أمانة الأساتذة المتبقية
+    setData({ totalSeats, totalInstShare, totalTeacherShare, totalPaidToTeachers, teacherLiability, cashIn,
+      totalRevenue: instituteRevenue, totalExpenses, netProfit: instituteRevenue - totalExpenses, expByCat });
     setLoading(false);
   };
 
@@ -2556,7 +2565,7 @@ function ReportsPage() {
       {activeReport === 'pnl' && !loading && data.totalRevenue !== undefined && (<>
         <div className="mb-3"><ReportExportBar printRef={pnlRef} pdfFilename={'تقرير_الأرباح_'+activeYear?.name} onPrint={()=>window.print()} onExcelExport={()=>{
           const rows = Object.entries(data.expByCat||{}).map(([cat, amt])=>[cat, amt]);
-          rows.unshift(['إجمالي الإيرادات', data.totalRevenue], ['إجمالي المصروفات', data.totalExpenses], ['صافي الربح', data.netProfit], ['---','---']);
+          rows.unshift(['النقد الكلي المستلم', data.cashIn], ['(−) حصة الأساتذة (أمانة)', data.totalTeacherShare], ['= إيرادات المعهد', data.totalRevenue], ['(−) المصاريف', data.totalExpenses], ['= صافي ربح المعهد', data.netProfit], ['المتبقي للأساتذة (مطلوب)', data.teacherLiability], ['--- تفصيل المصاريف ---','---']);
           exportToExcel(rows, ['البند','المبلغ'], 'تقرير_الأرباح_'+activeYear?.name);
         }}/></div>
         <div className="card p-6 print-receipt" ref={pnlRef}>
@@ -2564,19 +2573,26 @@ function ReportsPage() {
             <h3 className="text-xl font-bold text-primary-700">معهد كايزن - Kaizen Institute</h3>
             <h4 className="text-lg font-bold mt-2">تقرير الأرباح والخسائر - {activeYear?.name}</h4>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="p-4 bg-green-50 rounded-lg text-center">
-              <p className="text-sm text-gray-600">إجمالي الإيرادات</p>
-              <p className="text-2xl font-bold text-green-600">{formatMoney(data.totalRevenue)} د.ع</p>
-              <p className="text-xs text-gray-500 mt-1">حجوزات: {formatMoney(data.totalSeats)} | أقساط: {formatMoney(data.totalInstShare)}</p>
+          <div className="mb-6">
+            {/* الكشف الصافي: من النقد الكلي إلى صافي ربح المعهد */}
+            <div className="rounded-lg border overflow-hidden">
+              <div className="flex justify-between p-3 bg-gray-50"><span>💵 النقد الكلي المستلم</span><b>{formatMoney(data.cashIn)} د.ع</b></div>
+              <div className="flex justify-between p-3 border-t text-amber-700"><span>(−) حصة الأساتذة (أمانة — ليست ربح)</span><b>{formatMoney(data.totalTeacherShare)} د.ع</b></div>
+              <div className="flex justify-between p-3 border-t bg-green-50 text-green-700 font-bold"><span>= إيرادات المعهد (حصته فقط)</span><b>{formatMoney(data.totalRevenue)} د.ع</b></div>
+              <div className="flex justify-between p-3 border-t text-red-600"><span>(−) المصاريف</span><b>{formatMoney(data.totalExpenses)} د.ع</b></div>
+              <div className={`flex justify-between p-3 border-t font-bold text-lg ${data.netProfit >= 0 ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700'}`}>
+                <span>= صافي {data.netProfit >= 0 ? 'ربح' : 'خسارة'} المعهد</span><b>{formatMoney(Math.abs(data.netProfit))} د.ع</b>
+              </div>
             </div>
-            <div className="p-4 bg-red-50 rounded-lg text-center">
-              <p className="text-sm text-gray-600">إجمالي المصروفات</p>
-              <p className="text-2xl font-bold text-red-600">{formatMoney(data.totalExpenses)} د.ع</p>
-            </div>
-            <div className={`p-4 rounded-lg text-center ${data.netProfit >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
-              <p className="text-sm text-gray-600">صافي الربح</p>
-              <p className={`text-2xl font-bold ${data.netProfit >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>{formatMoney(data.netProfit)} د.ع</p>
+            <p className="text-xs text-gray-500 mt-1 mb-3">إيراد المعهد = حجوزات {formatMoney(data.totalSeats)} + حصة المعهد من الأقساط {formatMoney(data.totalInstShare)}</p>
+            {/* أمانة الأساتذة */}
+            <div className="rounded-lg border p-4" style={{background:'#FFFBEB'}}>
+              <p className="font-bold mb-2" style={{color:'#92400E'}}>🤝 أمانة الأساتذة (فلوس بيدك تخصّهم — مو ربح المعهد)</p>
+              <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                <div><p className="text-gray-600">المستلم لهم</p><b>{formatMoney(data.totalTeacherShare)} د.ع</b></div>
+                <div><p className="text-gray-600">المصروف لهم</p><b>{formatMoney(data.totalPaidToTeachers)} د.ع</b></div>
+                <div><p className="text-gray-600">المتبقي (مطلوب لهم)</p><b style={{color:'#B45309'}}>{formatMoney(data.teacherLiability)} د.ع</b></div>
+              </div>
             </div>
           </div>
           {data.expByCat && Object.keys(data.expByCat).length > 0 && (
