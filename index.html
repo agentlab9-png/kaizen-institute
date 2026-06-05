@@ -892,6 +892,9 @@ function StudentsPage() {
   const [registrations, setRegistrations] = useState([]);
   const [regForm, setRegForm] = useState({ subject_id:'', teacher_id:'', total_tuition:'' });
   const [dupWarning, setDupWarning] = useState(null);
+  const [changeTeacherReg, setChangeTeacherReg] = useState(null);
+  const [newTeacherId, setNewTeacherId] = useState('');
+  const [cancelReg, setCancelReg] = useState(null);
 
   // توحيد الاسم لاكتشاف التكرار (ي/ى، أ/إ/آ/ا، ة/ه، مسافات مضاعفة)
   const normalizeName = (n) => (n || '')
@@ -1032,6 +1035,50 @@ function StudentsPage() {
     setRegistrations(data || []);
   };
 
+  const reloadRegs = async () => {
+    const { data } = await supabase.from('registrations').select('*,subjects(name_ar),teachers(full_name)').eq('student_id', regStudent.id).eq('is_active', true);
+    setRegistrations(data || []);
+  };
+
+  const doChangeTeacher = async () => {
+    if(!newTeacherId) { showToast('اختر الأستاذ الجديد', 'error'); return; }
+    if(newTeacherId === changeTeacherReg.teacher_id) { showToast('هذا هو الأستاذ الحالي', 'error'); return; }
+    const { error } = await supabase.rpc('change_registration_teacher', {
+      p_registration_id: changeTeacherReg.id, p_new_teacher_id: newTeacherId, p_updated_by: user.user_id
+    });
+    if(error) { showToast('خطأ في تغيير الأستاذ: ' + (error.message||''), 'error'); return; }
+    logAudit(user, 'تغيير أستاذ مادة', 'registrations', changeTeacherReg.id, changeTeacherReg.subjects?.name_ar||'');
+    showToast('تم تغيير الأستاذ بنجاح');
+    setChangeTeacherReg(null); setNewTeacherId('');
+    reloadRegs();
+  };
+
+  const doCancelReg = async () => {
+    const reg = cancelReg;
+    if((reg.total_paid||0) > 0) {
+      showToast('لا يمكن إلغاء مادة عليها مدفوعات. احذف وصولات الدفع المرتبطة أولاً.', 'error');
+      setCancelReg(null); return;
+    }
+    const [allocRes, seatRes] = await Promise.all([
+      supabase.from('payment_allocations').select('id').eq('registration_id', reg.id),
+      supabase.from('seat_reservation_items').select('id').eq('registration_id', reg.id)
+    ]);
+    if((allocRes.data||[]).length > 0) {
+      showToast('لا يمكن إلغاء مادة عليها وصولات دفع. احذف الوصولات أولاً.', 'error');
+      setCancelReg(null); return;
+    }
+    if((seatRes.data||[]).length > 0) {
+      showToast('لا يمكن إلغاء مادة عليها حجز مقعد. احذف الحجز أولاً.', 'error');
+      setCancelReg(null); return;
+    }
+    const { error } = await supabase.from('registrations').delete().eq('id', reg.id);
+    if(error) { showToast('خطأ في إلغاء المادة', 'error'); return; }
+    logAudit(user, 'إلغاء مادة', 'registrations', reg.id, reg.subjects?.name_ar||'');
+    showToast('تم إلغاء المادة');
+    setCancelReg(null);
+    reloadRegs();
+  };
+
   const filtered = students.filter(s => !search || s.full_name?.includes(search) || (s.student_phone||'').includes(search));
   useEffect(() => { setPage(1); }, [search]);
 
@@ -1089,7 +1136,7 @@ function StudentsPage() {
       {/* Registrations Modal */}
       <Modal isOpen={showRegModal} onClose={()=>setShowRegModal(false)} title={`مواد الطالب: ${regStudent?.full_name||''}`} wide>
         <div className="mb-4">
-          <table><thead><tr><th>المادة</th><th>الأستاذ</th><th>القسط الكلي</th><th>حصة المعهد</th><th>حصة الأستاذ</th><th>المدفوع</th><th>المتبقي</th></tr></thead>
+          <table><thead><tr><th>المادة</th><th>الأستاذ</th><th>القسط الكلي</th><th>حصة المعهد</th><th>حصة الأستاذ</th><th>المدفوع</th><th>المتبقي</th><th>إجراءات</th></tr></thead>
             <tbody>
               {registrations.map(r=>(
                 <tr key={r.id}>
@@ -1097,9 +1144,15 @@ function StudentsPage() {
                   <td>{formatMoney(r.total_tuition)}</td><td>{formatMoney(r.institute_share)}</td><td>{formatMoney(r.teacher_share)}</td>
                   <td className="text-green-600 font-medium">{formatMoney(r.total_paid)}</td>
                   <td className="text-red-500 font-medium">{formatMoney(r.remaining_balance)}</td>
+                  <td>
+                    <div className="flex gap-2">
+                      {hasPerm('students.edit') && <button onClick={()=>{setChangeTeacherReg(r);setNewTeacherId('')}} className="text-blue-600 hover:text-blue-800" title="تغيير الأستاذ">🔄</button>}
+                      {hasPerm('students.delete') && <button onClick={()=>setCancelReg(r)} className="text-red-500 hover:text-red-700" title="إلغاء المادة">🗑️</button>}
+                    </div>
+                  </td>
                 </tr>
               ))}
-              {registrations.length===0 && <tr><td colSpan="7" className="text-center py-4 text-gray-400">لا توجد مواد مسجلة</td></tr>}
+              {registrations.length===0 && <tr><td colSpan="8" className="text-center py-4 text-gray-400">لا توجد مواد مسجلة</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1119,6 +1172,33 @@ function StudentsPage() {
           </div>
         )}
       </Modal>
+      {/* تغيير أستاذ المادة */}
+      <Modal isOpen={!!changeTeacherReg} onClose={()=>{setChangeTeacherReg(null);setNewTeacherId('')}} title="🔄 تغيير أستاذ المادة">
+        {changeTeacherReg && <div className="space-y-4">
+          <div className="bg-gray-50 rounded-lg p-3 text-sm">
+            <p>المادة: <b>{changeTeacherReg.subjects?.name_ar}</b></p>
+            <p>الأستاذ الحالي: <b>{changeTeacherReg.teachers?.full_name}</b></p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">الأستاذ الجديد *</label>
+            <select className="input-field" value={newTeacherId} onChange={e=>setNewTeacherId(e.target.value)}>
+              <option value="">اختر الأستاذ</option>
+              {teachers.filter(t=>t.id!==changeTeacherReg.teacher_id).map(t=><option key={t.id} value={t.id}>{t.full_name} ({t.commission_type==='percentage'?t.commission_value+'%':formatMoney(t.commission_value)})</option>)}
+            </select>
+          </div>
+          {(changeTeacherReg.total_paid||0) > 0 && (
+            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 text-sm text-yellow-800">
+              ⚠️ هذه المادة عليها مدفوعات ({formatMoney(changeTeacherReg.total_paid)} د.ع). تغيير الأستاذ سينقل المبلغ المكتسب من <b>{changeTeacherReg.teachers?.full_name}</b> إلى الأستاذ الجديد، ويعاد حساب الحصص حسب عمولته.
+            </div>
+          )}
+          <div className="flex gap-3 justify-end pt-2">
+            <button className="btn-ghost" onClick={()=>{setChangeTeacherReg(null);setNewTeacherId('')}}>إلغاء</button>
+            <button className="btn-primary" onClick={doChangeTeacher}>تأكيد التغيير</button>
+          </div>
+        </div>}
+      </Modal>
+      {/* تأكيد إلغاء المادة */}
+      <ConfirmDialog isOpen={!!cancelReg} onConfirm={doCancelReg} onCancel={()=>setCancelReg(null)} message={cancelReg ? `هل أنت متأكد من إلغاء مادة "${cancelReg.subjects?.name_ar||''}"؟` : ''}/>
       <ConfirmDialog isOpen={!!confirmDel} onConfirm={handleDelete} onCancel={()=>setConfirmDel(null)} message="هل أنت متأكد من حذف هذا الطالب؟"/>
       {/* Step 1: Warning about student data */}
       <Modal isOpen={delStep===1} onClose={()=>{setDelStep(0);setDelWarning(null)}} title="⚠️ تنبيه: الطالب لديه حسابات!">
